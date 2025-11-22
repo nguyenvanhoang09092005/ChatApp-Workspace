@@ -1,0 +1,148 @@
+/* verify-email.css */
+.root {
+    -fx-background-color: #ffffff;
+}
+
+/* Left Panel Styles */
+.left-panel {
+    -fx-background-color: linear-gradient(to bottom right, #667eea, #764ba2);
+    -fx-padding: 40px;
+    -fx-background-insets: 0;
+     -fx-background-radius: 0 20 20 0;
+}
+
+
+
+
+.brand-title {
+    -fx-text-fill: white;
+}
+
+.brand-subtitle {
+    -fx-text-fill: rgba(255, 255, 255, 0.8);
+}
+
+/* Form Container */
+.form-container {
+    -fx-background-color: #ffffff;
+    -fx-padding: 50px;
+}
+
+.form-title {
+    -fx-text-fill: #2d3748;
+}
+
+.form-subtitle {
+    -fx-text-fill: #718096;
+}
+
+.email-icon {
+    -fx-text-fill: #4a5568;
+}
+
+.secondary-text {
+    -fx-text-fill: #718096;
+}
+
+/* TextField Styles */
+.custom-textfield {
+    -fx-background-color: #f7fafc;
+    -fx-background-radius: 8px;
+    -fx-border-color: #e2e8f0;
+    -fx-border-radius: 8px;
+    -fx-border-width: 2px;
+    -fx-padding: 0 15px;
+}
+
+.custom-textfield:focused {
+    -fx-border-color: #667eea;
+    -fx-background-color: #ffffff;
+}
+
+.code-field {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-alignment: center;
+}
+
+/* Button Styles */
+.primary-button {
+    -fx-background-color: #667eea;
+    -fx-background-radius: 8px;
+    -fx-text-fill: white;
+    -fx-cursor: hand;
+}
+
+.primary-button:hover {
+    -fx-background-color: #5a6fd8;
+}
+
+.primary-button:pressed {
+    -fx-background-color: #4c5dc1;
+}
+
+.primary-button:disabled {
+    -fx-background-color: #cbd5e0;
+}
+
+.secondary-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8px;
+    -fx-border-color: #667eea;
+    -fx-border-radius: 8px;
+    -fx-border-width: 2px;
+    -fx-text-fill: #667eea;
+    -fx-cursor: hand;
+}
+
+.secondary-button:hover {
+    -fx-background-color: #f7fafc;
+}
+
+.secondary-button:pressed {
+    -fx-background-color: #edf2f7;
+}
+
+.secondary-button:disabled {
+    -fx-border-color: #cbd5e0;
+    -fx-text-fill: #cbd5e0;
+}
+
+/* Label Styles */
+.field-label {
+    -fx-text-fill: #2d3748;
+}
+
+.hint-label {
+    -fx-text-fill: #a0aec0;
+    -fx-font-size: 12px;
+}
+
+.error-label {
+    -fx-text-fill: #e53e3e;
+    -fx-font-size: 14px;
+    -fx-alignment: center;
+}
+
+.success-label {
+    -fx-text-fill: #38a169;
+    -fx-font-size: 14px;
+    -fx-alignment: center;
+}
+
+.timer-label {
+    -fx-text-fill: #718096;
+    -fx-font-size: 12px;
+}
+
+.link-bold {
+    -fx-text-fill: #667eea;
+    -fx-font-weight: bold;
+    -fx-border-color: transparent;
+    -fx-underline: false;
+    -fx-cursor: hand;
+}
+
+.link-bold:hover {
+    -fx-underline: true;
+}

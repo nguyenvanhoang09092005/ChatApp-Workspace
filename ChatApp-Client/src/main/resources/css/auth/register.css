@@ -1,0 +1,171 @@
+/* register.css */
+.root {
+    -fx-background-color: #ffffff;
+}
+
+/* Left Panel Styles */
+.left-panel {
+    -fx-background-color: linear-gradient(to bottom right, #667eea, #764ba2);
+    -fx-padding: 40px;
+     -fx-background-radius: 0 40 40 0;
+     -fx-background-insets: 0;
+
+}
+
+.brand-title {
+    -fx-text-fill: white;
+}
+
+.brand-subtitle {
+    -fx-text-fill: rgba(255, 255, 255, 0.8);
+}
+
+/* Form Container */
+.form-container {
+    -fx-background-color: #ffffff;
+    -fx-padding: 50px;
+}
+
+.form-title {
+    -fx-text-fill: #2d3748;
+}
+
+.form-subtitle {
+    -fx-text-fill: #718096;
+}
+
+/* TextField Styles */
+.custom-textfield {
+    -fx-background-color: #f7fafc;
+    -fx-background-radius: 8px;
+    -fx-border-color: #e2e8f0;
+    -fx-border-radius: 8px;
+    -fx-border-width: 2px;
+    -fx-padding: 0 15px;
+    -fx-pref-height: 50px;
+}
+
+.custom-textfield:focused {
+    -fx-border-color: #667eea;
+    -fx-background-color: #ffffff;
+}
+
+/* Password Field Styles */
+.password-field {
+    -fx-font-family: "System";
+}
+
+/* Button Styles */
+.primary-button {
+    -fx-background-color: #667eea;
+    -fx-background-radius: 8px;
+    -fx-text-fill: white;
+    -fx-cursor: hand;
+    -fx-pref-height: 45px;
+}
+
+.primary-button:hover {
+    -fx-background-color: #5a6fd8;
+}
+
+.primary-button:pressed {
+    -fx-background-color: #4c5dc1;
+}
+
+.primary-button:disabled {
+    -fx-background-color: #cbd5e0;
+}
+
+/* Checkbox Styles */
+.check-box {
+    -fx-text-fill: #4a5568;
+}
+
+.check-box .box {
+    -fx-background-color: #f7fafc;
+    -fx-border-color: #cbd5e0;
+    -fx-border-radius: 4px;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: #667eea;
+}
+
+.check-box:selected .box {
+    -fx-background-color: #667eea;
+    -fx-border-color: #667eea;
+}
+
+/* Label Styles */
+.field-label {
+    -fx-text-fill: #2d3748;
+    -fx-font-weight: bold;
+}
+
+.hint-label {
+    -fx-text-fill: #a0aec0;
+    -fx-font-size: 12px;
+}
+
+.error-label {
+    -fx-text-fill: #e53e3e;
+    -fx-font-size: 14px;
+    -fx-alignment: center;
+}
+
+.success-label {
+    -fx-text-fill: #38a169;
+    -fx-font-size: 14px;
+    -fx-alignment: center;
+}
+
+/* Password Strength */
+.password-strength-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.password-strength-weak {
+    -fx-text-fill: #e53e3e;
+}
+
+.password-strength-medium {
+    -fx-text-fill: #d69e2e;
+}
+
+.password-strength-strong {
+    -fx-text-fill: #38a169;
+}
+
+.password-strength-bar .track {
+    -fx-background-color: #e2e8f0;
+    -fx-background-radius: 4px;
+}
+
+.password-strength-bar .bar {
+    -fx-background-radius: 4px;
+}
+
+/* Link Styles */
+.link {
+    -fx-text-fill: #667eea;
+    -fx-border-color: transparent;
+    -fx-underline: false;
+    -fx-cursor: hand;
+}
+
+.link:hover {
+    -fx-underline: true;
+}
+
+.link-bold {
+    -fx-text-fill: #667eea;
+    -fx-font-weight: bold;
+    -fx-border-color: transparent;
+    -fx-underline: false;
+    -fx-cursor: hand;
+}
+
+.link-bold:hover {
+    -fx-underline: true;
+}
