@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.Hyperlink?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane prefHeight="600.0" prefWidth="900.0" styleClass="root" stylesheets="@../../css/auth/login.css" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.example.chatappclient.client.controllers.auth.LoginController">
+
+    <!-- Left Side - Image/Branding -->
+    <left>
+        <VBox alignment="CENTER" prefHeight="600.0" prefWidth="439.0" styleClass="left-panel">
+            <VBox alignment="CENTER" spacing="20">
+                <Label styleClass="brand-title" text="ChatApp">
+                    <font>
+                        <Font name="System Bold" size="48.0" />
+                    </font>
+                </Label>
+                <Label styleClass="brand-subtitle" text="Kết nối mọi lúc, mọi nơi">
+                    <font>
+                        <Font size="18.0" />
+                    </font>
+                </Label>
+            </VBox>
+        </VBox>
+    </left>
+
+    <!-- Right Side - Login Form -->
+    <center>
+        <VBox alignment="CENTER" spacing="15" styleClass="form-container">
+            <padding>
+                <Insets bottom="50" left="50" right="50" top="50" />
+            </padding>
+
+            <!-- Title -->
+            <VBox alignment="CENTER" spacing="5">
+                <Label styleClass="form-title" text="Đăng nhập">
+                    <font>
+                        <Font name="System Bold" size="32.0" />
+                    </font>
+                </Label>
+                <Label styleClass="form-subtitle" text="Chào mừng bạn trở lại!">
+                    <font>
+                        <Font size="14.0" />
+                    </font>
+                </Label>
+            </VBox>
+
+            <Region prefHeight="5" />
+
+            <!-- Error Label -->
+            <Label fx:id="errorLabel" managed="false" maxWidth="350.0" styleClass="error-label" visible="false" wrapText="true" />
+
+            <!-- Username Field -->
+            <VBox maxWidth="350.0" spacing="8">
+                <Label styleClass="field-label" text="Tên đăng nhập" />
+                <TextField fx:id="usernameField" prefHeight="40.0" promptText="Nhập tên đăng nhập" styleClass="custom-textfield" />
+            </VBox>
+
+            <!-- Password Field -->
+            <VBox maxWidth="350.0" spacing="8">
+                <Label styleClass="field-label" text="Mật khẩu" />
+                <PasswordField fx:id="passwordField" prefHeight="40.0" promptText="Nhập mật khẩu" styleClass="custom-textfield" />
+            </VBox>
+
+            <!-- Remember Me & Forgot Password -->
+            <HBox alignment="CENTER_LEFT" maxWidth="350.0" spacing="10">
+                <CheckBox fx:id="rememberMeCheckbox" styleClass="remember-checkbox" text="Ghi nhớ đăng nhập" />
+                <Region HBox.hgrow="ALWAYS" />
+                <Hyperlink fx:id="forgotPasswordLink" onAction="#handleForgotPassword" styleClass="link" text="Quên mật khẩu?" />
+            </HBox>
+
+            <!-- Login Button -->
+            <VBox alignment="CENTER" maxWidth="350.0" spacing="10">
+                <Button fx:id="loginButton" maxWidth="Infinity" onAction="#handleLogin" prefHeight="45.0" styleClass="primary-button" text="Đăng nhập" />
+                <ProgressIndicator fx:id="loadingIndicator" managed="false" prefHeight="30.0" prefWidth="30.0" visible="false" />
+            </VBox>
+
+            <!-- Register Link -->
+            <HBox alignment="CENTER" spacing="5">
+                <Label styleClass="secondary-text" text="Chưa có tài khoản?" />
+                <Hyperlink fx:id="registerLink" onAction="#handleRegister" styleClass="link-bold" text="Đăng ký ngay" />
+            </HBox>
+
+            <!-- Spacer -->
+            <Region VBox.vgrow="ALWAYS" />
+        </VBox>
+    </center>
+</BorderPane>

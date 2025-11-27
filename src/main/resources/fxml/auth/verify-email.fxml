@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Hyperlink?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane prefHeight="550.0" prefWidth="800.0" styleClass="root" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.example.chatappclient.client.controllers.auth.VerifyEmailController">
+
+    <!-- Left Side - Branding -->
+    <left>
+        <VBox alignment="CENTER" prefHeight="550.0" prefWidth="389.0" styleClass="left-panel">
+            <VBox alignment="CENTER" spacing="15">
+                <Label styleClass="brand-title" text="ChatApp">
+                    <font>
+                        <Font name="System Bold" size="42.0" />
+                    </font>
+                </Label>
+                <Label styleClass="brand-subtitle" text="Xác thực tài khoản">
+                    <font>
+                        <Font size="16.0" />
+                    </font>
+                </Label>
+            </VBox>
+         <opaqueInsets>
+            <Insets />
+         </opaqueInsets>
+        </VBox>
+    </left>
+
+    <!-- Right Side - Verify Form -->
+    <center>
+        <VBox alignment="CENTER" spacing="20" styleClass="form-container">
+            <padding>
+                <Insets bottom="40" left="40" right="40" top="40" />
+            </padding>
+
+            <!-- Header -->
+            <VBox alignment="CENTER" spacing="8">
+                <Label styleClass="email-icon" text="📧">
+                    <font>
+                        <Font size="48.0" />
+                    </font>
+                </Label>
+                <Label styleClass="form-title" text="Xác thực Email">
+                    <font>
+                        <Font name="System Bold" size="28.0" />
+                    </font>
+                </Label>
+                <Label fx:id="emailLabel" alignment="CENTER" maxWidth="320.0" prefHeight="19.0" prefWidth="273.0" styleClass="form-subtitle" text="Mã xác thực đã được gửi đến email" textAlignment="CENTER" wrapText="true">
+                    <font>
+                        <Font size="15.0" />
+                    </font>
+                </Label>
+            </VBox>
+
+            <!-- Messages -->
+            <VBox alignment="CENTER" maxWidth="320.0" minHeight="30.0" spacing="5">
+                <Label fx:id="errorLabel" styleClass="error-label" wrapText="true" />
+                <Label fx:id="successLabel" styleClass="success-label" wrapText="true" />
+            <opaqueInsets>
+               <Insets />
+            </opaqueInsets>
+            </VBox>
+
+            <!-- Code Input -->
+            <VBox maxWidth="320.0" spacing="6">
+                <Label styleClass="field-label" text="Mã xác thực (6 chữ số)">
+                    <font>
+                        <Font name="System Bold" size="13.0" />
+                    </font>
+                </Label>
+                <TextField fx:id="codeField" alignment="CENTER" prefHeight="48.0" promptText="000000" styleClass="custom-textfield code-field">
+                    <font>
+                        <Font name="System Bold" size="22.0" />
+                    </font>
+                </TextField>
+            </VBox>
+
+            <!-- Verify Button -->
+            <VBox alignment="CENTER" maxWidth="320.0" spacing="8">
+                <Button fx:id="verifyButton" maxWidth="Infinity" onAction="#handleVerify" prefHeight="44.0" styleClass="primary-button" text="Xác thực">
+                    <font>
+                        <Font name="System Bold" size="14.0" />
+                    </font>
+                </Button>
+                <ProgressIndicator fx:id="loadingIndicator" prefHeight="28.0" prefWidth="28.0" />
+            </VBox>
+
+            <!-- Resend Section -->
+            <VBox alignment="CENTER" maxWidth="320.0" spacing="8">
+                <HBox alignment="CENTER" spacing="8">
+                    <Label styleClass="secondary-text" text="Chưa nhận được mã?">
+                        <font>
+                            <Font size="12.0" />
+                        </font>
+                    </Label>
+                    <Button fx:id="resendButton" onAction="#handleResend" styleClass="link-button" text="Gửi lại">
+                        <font>
+                            <Font name="System Bold" size="12.0" />
+                        </font>
+                    </Button>
+                </HBox>
+                <Label fx:id="timerLabel" styleClass="timer-label">
+                    <font>
+                        <Font size="11.0" />
+                    </font>
+                </Label>
+            </VBox>
+
+            <!-- Back to Login -->
+            <HBox alignment="CENTER" spacing="5">
+                <padding>
+                    <Insets top="10" />
+                </padding>
+                <Label styleClass="secondary-text" text="Tài khoản khác?">
+                    <font>
+                        <Font size="12.0" />
+                    </font>
+                </Label>
+                <Hyperlink fx:id="loginLink" onAction="#handleBackToLogin" styleClass="link-bold" text="Đăng nhập">
+                    <font>
+                        <Font name="System Bold" size="12.0" />
+                    </font>
+                </Hyperlink>
+            </HBox>
+
+        </VBox>
+    </center>
+</BorderPane>
