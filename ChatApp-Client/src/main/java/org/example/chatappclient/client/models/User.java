@@ -1,6 +1,7 @@
 package org.example.chatappclient.client.models;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
@@ -15,6 +16,8 @@ public class User implements Serializable {
     private String displayName;
     private String avatarUrl;
     private String bio;
+    private String gender;
+    private LocalDate birthday;
     private String status; // online, offline, away, busy
     private boolean isOnline;
     private LocalDateTime lastSeen;
@@ -39,6 +42,22 @@ public class User implements Serializable {
     }
 
     // ==================== GETTERS ====================
+    public String getGender() {
+        return gender;
+    }
+
+    public void setGender(String gender) {
+        this.gender = gender;
+    }
+
+    public LocalDate getBirthday() {
+        return birthday;
+    }
+
+    public void setBirthday(LocalDate birthday) {
+        this.birthday = birthday;
+    }
+
 
     public String getUserId() { return userId; }
     public String getUsername() { return username; }

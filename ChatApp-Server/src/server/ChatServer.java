@@ -6,6 +6,7 @@ import utils.ZeroTierMonitor;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Map;
 import java.util.concurrent.*;
 
 public class ChatServer {
@@ -236,5 +237,50 @@ public class ChatServer {
         } catch (Exception e) {
             return "127.0.0.1";
         }
+    }
+
+    public void broadcastUserStatus(String userId, boolean isOnline) {
+        if (userId == null) {
+            return;
+        }
+
+        System.out.println("→ Đang phát trạng thái cho người dùng " + userId + ": " +
+                (isOnline ? "TRỰC TUYẾN" : "NGOẠI TUYẾN"));
+
+        // Lấy thông tin người dùng để đưa vào bản tin broadcast
+        database.dao.UserDAO userDAO = new database.dao.UserDAO();
+        models.User user = userDAO.findById(userId);
+        if (user == null) {
+            System.err.println("⚠️ Không tìm thấy người dùng để phát trạng thái: " + userId);
+            return;
+        }
+
+        // Tạo thông điệp trạng thái
+        // Định dạng: USER_STATUS_CHANGED|||userId|||isOnline|||statusText|||lastSeen
+        String statusMessage =
+                protocol.Protocol.USER_STATUS_CHANGED + protocol.Protocol.DELIMITER +
+                        userId + protocol.Protocol.DELIMITER +
+                        isOnline + protocol.Protocol.DELIMITER +
+                        user.getStatusText() + protocol.Protocol.DELIMITER +
+                        (user.getLastSeen() != null ? user.getLastSeen().toString() : "");
+
+
+        // Gửi tới tất cả client đang kết nối, ngoại trừ chính người dùng đó
+        int sentCount = 0;
+        synchronized (connectedClients) {  // ĐÃ SỬA: clients -> connectedClients
+            for (Map.Entry<String, ClientHandler> entry : connectedClients.entrySet()) {
+                String clientId = entry.getKey();
+                ClientHandler handler = entry.getValue();
+
+                // Không gửi cập nhật trạng thái cho chính người dùng
+                if (!clientId.equals(userId) && handler.isConnected()) {
+                    if (handler.sendMessage(statusMessage)) {
+                        sentCount++;
+                    }
+                }
+            }
+        }
+
+        System.out.println("✅ Đã gửi trạng thái tới " + sentCount + " client");
     }
 }

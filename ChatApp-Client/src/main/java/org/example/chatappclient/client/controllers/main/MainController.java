@@ -332,7 +332,7 @@ public class MainController {
 
     // ==================== PRIVATE METHODS ====================
 
-    private void openConversation(Conversation conv) {
+    public  void openConversation(Conversation conv) {
         currentConversationId = conv.getConversationId();
         showChatPanel();
         updateChatHeader(conv);

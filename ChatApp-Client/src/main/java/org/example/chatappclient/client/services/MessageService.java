@@ -17,7 +17,7 @@ public class MessageService {
 
     private static volatile MessageService instance;
     private final SocketClient socketClient;
-    private final AuthService authService; // FIXED: Added field
+    private final AuthService authService;
 
     // Callbacks
     private BiConsumer<String, Message> onNewMessage;
@@ -27,7 +27,7 @@ public class MessageService {
 
     private MessageService() {
         socketClient = SocketClient.getInstance();
-        authService = AuthService.getInstance(); // FIXED: Initialize authService
+        authService = AuthService.getInstance();
     }
 
     public static MessageService getInstance() {
@@ -58,8 +58,14 @@ public class MessageService {
 
     public Message sendMessage(String conversationId, String senderId, String content,
                                String type, String replyToId) throws Exception {
+        // FIXED: Sanitize content - loại bỏ ký tự xuống dòng
+        content = sanitizeContent(content);
+
         String request = Protocol.buildRequest(Protocol.MESSAGE_SEND,
                 conversationId, senderId, content, type, replyToId != null ? replyToId : "");
+
+        System.out.println("🔍 DEBUG - Request being sent: " + request);
+
         String response = socketClient.sendRequest(request, 10000);
 
         if (response == null) throw new Exception("Server không phản hồi");
@@ -83,6 +89,7 @@ public class MessageService {
     // ==================== MESSAGE ACTIONS ====================
 
     public void editMessage(String messageId, String newContent) throws Exception {
+        newContent = sanitizeContent(newContent);
         String request = Protocol.buildRequest(Protocol.MESSAGE_EDIT, messageId, newContent);
         String response = socketClient.sendRequest(request, 10000);
 
@@ -127,6 +134,25 @@ public class MessageService {
         socketClient.sendMessage(request);
     }
 
+    // ==================== HELPER METHODS ====================
+
+    /**
+     * FIXED: Sanitize content to remove problematic characters
+     */
+    private String sanitizeContent(String content) {
+        if (content == null) return "";
+
+        // Loại bỏ các ký tự xuống dòng và carriage return
+        content = content.replace("\r\n", " ");
+        content = content.replace("\n", " ");
+        content = content.replace("\r", " ");
+
+        // Trim khoảng trắng thừa
+        content = content.trim();
+
+        return content;
+    }
+
     // ==================== PARSING ====================
 
     private List<Message> parseMessages(String data) {
@@ -152,7 +178,20 @@ public class MessageService {
         m.setContent(f[3]);
         if (f.length > 4) m.setMessageType(f[4]);
         if (f.length > 5) m.setMediaUrl(f[5]);
-        if (f.length > 6) m.setTimestamp(LocalDateTime.parse(f[6]));
+        if (f.length > 6) {
+            String ts = f[6];
+            if (ts != null && !ts.isEmpty() && !ts.equals("0")) {
+                try {
+                    m.setTimestamp(LocalDateTime.parse(ts));
+                } catch (Exception e) {
+                    // fallback: dùng thời gian hiện tại
+                    m.setTimestamp(LocalDateTime.now());
+                }
+            } else {
+                // timestamp rỗng → gán thời điểm hiện tại
+                m.setTimestamp(LocalDateTime.now());
+            }
+        }
         if (f.length > 7) m.setRead(Boolean.parseBoolean(f[7]));
         if (f.length > 8) m.setSenderAvatar(f[8]);
         if (f.length > 9) m.setFileName(f[9]);
@@ -198,6 +237,7 @@ public class MessageService {
                 onNewMessage.accept(conversationId, msg);
             }
         } catch (Exception e) {
+            System.err.println("❌ Error sending text message: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -214,6 +254,7 @@ public class MessageService {
                 onNewMessage.accept(conversationId, msg);
             }
         } catch (Exception e) {
+            System.err.println("❌ Error sending like: " + e.getMessage());
             e.printStackTrace();
         }
     }

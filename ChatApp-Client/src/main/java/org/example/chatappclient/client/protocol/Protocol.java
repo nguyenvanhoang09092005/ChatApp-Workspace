@@ -25,6 +25,10 @@ public class Protocol {
     public static final String USER_CHANGE_PASSWORD = "USER_CHANGE_PASSWORD";
     public static final String USER_SEARCH = "USER_SEARCH";
     public static final String USER_GET_ONLINE_STATUS = "USER_GET_ONLINE_STATUS";
+    // Trong class Protocol
+    public static final String USER_STATUS_CHANGED = "USER_STATUS_CHANGED";
+    public static final String MESSAGE_NEW = "MESSAGE_NEW";
+
 
     // ==================== CONTACT COMMANDS ====================
     public static final String CONTACT_GET_ALL = "CONTACT_GET_ALL";

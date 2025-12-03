@@ -12,47 +12,65 @@ import java.util.List;
  * Handles all database operations related to users
  */
 public class UserDAO {
-
-    // ==================== CREATE ====================
+    // ==================== SEARCH METHODS ====================
 
     /**
-     * Create new user in database
+     * Search user by email or phone (exact match)
+     * This is used for finding specific users to start conversations
      */
-    public static boolean createUser(User user) {
-        String sql = "INSERT INTO users (user_id, username, email, phone, password_hash, " +
-                "salt, display_name, avatar_url, status_message, is_online, is_verified, is_active, " +
-                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    public static User findByEmailOrPhone(String query) {
+        String sql = "SELECT * FROM users WHERE (email = ? OR phone = ?) AND is_active = TRUE AND is_verified = TRUE";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setString(1, user.getUserId());
-            ps.setString(2, user.getUsername());
-            ps.setString(3, user.getEmail());
-            ps.setString(4, user.getPhone());
-            ps.setString(5, user.getPasswordHash());
-            ps.setString(6, user.getSalt());
-            ps.setString(7, user.getDisplayName() != null ? user.getDisplayName() : user.getUsername());
-            ps.setString(8, user.getAvatarUrl());
-            ps.setString(9, user.getStatusMessage());
-            ps.setBoolean(10, false); // is_online default false
-            ps.setBoolean(11, user.isVerified());
-            ps.setBoolean(12, user.isActive());
-            ps.setTimestamp(13, Timestamp.valueOf(LocalDateTime.now()));
-            ps.setTimestamp(14, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setString(1, query);
+            ps.setString(2, query);
+            ResultSet rs = ps.executeQuery();
 
-            int result = ps.executeUpdate();
-            System.out.println("✅ User created: " + user.getUsername() + " (rows affected: " + result + ")");
-            return result > 0;
+            if (rs.next()) {
+                return mapResultSetToUser(rs);
+            }
 
         } catch (SQLException e) {
-            System.err.println("❌ Error creating user: " + e.getMessage());
-            e.printStackTrace();
-            return false;
+            System.err.println("❌ Error finding user by email or phone: " + e.getMessage());
         }
+
+        return null;
     }
 
-    // ==================== READ ====================
+    /**
+     * Search users by keyword (username, email, phone, display name)
+     * This is used for general user search with partial matches
+     */
+    public static List<User> searchByKeyword(String keyword, int limit) {
+        String sql = "SELECT * FROM users WHERE is_active = TRUE AND is_verified = TRUE AND " +
+                "(username LIKE ? OR display_name LIKE ? OR email LIKE ? OR phone LIKE ?) " +
+                "ORDER BY username LIMIT ?";
+        List<User> users = new ArrayList<>();
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            String pattern = "%" + keyword + "%";
+            ps.setString(1, pattern);
+            ps.setString(2, pattern);
+            ps.setString(3, pattern);
+            ps.setString(4, pattern);
+            ps.setInt(5, limit);
+
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+                users.add(mapResultSetToUser(rs));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error searching users by keyword: " + e.getMessage());
+        }
+
+        return users;
+    }
 
     /**
      * Find user by username
@@ -101,6 +119,29 @@ public class UserDAO {
     }
 
     /**
+     * Find user by phone
+     */
+    public static User findByPhone(String phone) {
+        String sql = "SELECT * FROM users WHERE phone = ? AND is_active = TRUE";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, phone);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                return mapResultSetToUser(rs);
+            }
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error finding user by phone: " + e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
      * Find user by ID
      */
     public static User findById(String userId) {
@@ -122,6 +163,127 @@ public class UserDAO {
 
         return null;
     }
+
+
+    //online
+    public static boolean updateOnlineStatus(String userId, boolean isOnline) {
+        String sql = "UPDATE users SET is_online = ?, last_seen = ?, updated_at = ? WHERE user_id = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setBoolean(1, isOnline);
+            ps.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setTimestamp(3, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setString(4, userId);
+
+            return ps.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error updating online status: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Update last seen timestamp
+     */
+    public static boolean updateLastSeen(String userId) {
+        String sql = "UPDATE users SET last_seen = ?, updated_at = ? WHERE user_id = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setString(3, userId);
+
+            return ps.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error updating last seen: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Map ResultSet to User object (CHỈ GIỮ MỘT PHƯƠNG THỨC NÀY)
+     */
+    private static User mapResultSetToUser(ResultSet rs) throws SQLException {
+        User user = new User();
+
+        user.setUserId(rs.getString("user_id"));
+        user.setUsername(rs.getString("username"));
+        user.setEmail(rs.getString("email"));
+        user.setPhone(rs.getString("phone"));
+        user.setPasswordHash(rs.getString("password_hash"));
+        user.setSalt(rs.getString("salt"));
+        user.setDisplayName(rs.getString("display_name"));
+        user.setAvatarUrl(rs.getString("avatar_url"));
+        user.setStatusMessage(rs.getString("status_message"));
+        user.setOnline(rs.getBoolean("is_online"));
+        user.setBio(rs.getString("bio"));
+
+        Timestamp lastSeen = rs.getTimestamp("last_seen");
+        if (lastSeen != null) {
+            user.setLastSeen(lastSeen.toLocalDateTime());
+        }
+
+        Timestamp createdAt = rs.getTimestamp("created_at");
+        if (createdAt != null) {
+            user.setCreatedAt(createdAt.toLocalDateTime());
+        }
+
+        Timestamp updatedAt = rs.getTimestamp("updated_at");
+        if (updatedAt != null) {
+            user.setUpdatedAt(updatedAt.toLocalDateTime());
+        }
+
+        user.setActive(rs.getBoolean("is_active"));
+        user.setVerified(rs.getBoolean("is_verified"));
+
+        return user;
+    }
+    // ==================== CREATE ====================
+
+    /**
+     * Create new user in database
+     */
+    public static boolean createUser(User user) {
+        String sql = "INSERT INTO users (user_id, username, email, phone, password_hash, " +
+                "salt, display_name, avatar_url, status_message, is_online, is_verified, is_active, " +
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, user.getUserId());
+            ps.setString(2, user.getUsername());
+            ps.setString(3, user.getEmail());
+            ps.setString(4, user.getPhone());
+            ps.setString(5, user.getPasswordHash());
+            ps.setString(6, user.getSalt());
+            ps.setString(7, user.getDisplayName() != null ? user.getDisplayName() : user.getUsername());
+            ps.setString(8, user.getAvatarUrl());
+            ps.setString(9, user.getStatusMessage());
+            ps.setBoolean(10, false); // is_online default false
+            ps.setBoolean(11, user.isVerified());
+            ps.setBoolean(12, user.isActive());
+            ps.setTimestamp(13, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setTimestamp(14, Timestamp.valueOf(LocalDateTime.now()));
+
+            int result = ps.executeUpdate();
+            System.out.println("✅ User created: " + user.getUsername() + " (rows affected: " + result + ")");
+            return result > 0;
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error creating user: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
 
     /**
      * Search users by username or display name
@@ -227,24 +389,24 @@ public class UserDAO {
     /**
      * Update online status
      */
-    public static boolean updateOnlineStatus(String userId, boolean isOnline) {
-        String sql = "UPDATE users SET is_online = ?, last_seen = ?, updated_at = ? WHERE user_id = ?";
-
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setBoolean(1, isOnline);
-            ps.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
-            ps.setTimestamp(3, Timestamp.valueOf(LocalDateTime.now()));
-            ps.setString(4, userId);
-
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            System.err.println("❌ Error updating online status: " + e.getMessage());
-            return false;
-        }
-    }
+//    public static boolean updateOnlineStatus(String userId, boolean isOnline) {
+//        String sql = "UPDATE users SET is_online = ?, last_seen = ?, updated_at = ? WHERE user_id = ?";
+//
+//        try (Connection conn = DBConnection.getConnection();
+//             PreparedStatement ps = conn.prepareStatement(sql)) {
+//
+//            ps.setBoolean(1, isOnline);
+//            ps.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
+//            ps.setTimestamp(3, Timestamp.valueOf(LocalDateTime.now()));
+//            ps.setString(4, userId);
+//
+//            return ps.executeUpdate() > 0;
+//
+//        } catch (SQLException e) {
+//            System.err.println("❌ Error updating online status: " + e.getMessage());
+//            return false;
+//        }
+//    }
 
     /**
      * Verify user account
@@ -341,40 +503,40 @@ public class UserDAO {
     /**
      * Map ResultSet to User object
      */
-    private static User mapResultSetToUser(ResultSet rs) throws SQLException {
-        User user = new User();
-
-        user.setUserId(rs.getString("user_id"));
-        user.setUsername(rs.getString("username"));
-        user.setEmail(rs.getString("email"));
-        user.setPhone(rs.getString("phone"));
-        user.setPasswordHash(rs.getString("password_hash"));
-        user.setSalt(rs.getString("salt"));
-        user.setDisplayName(rs.getString("display_name"));
-        user.setAvatarUrl(rs.getString("avatar_url"));
-        user.setStatusMessage(rs.getString("status_message"));
-        user.setOnline(rs.getBoolean("is_online"));
-
-        Timestamp lastSeen = rs.getTimestamp("last_seen");
-        if (lastSeen != null) {
-            user.setLastSeen(lastSeen.toLocalDateTime());
-        }
-
-        Timestamp createdAt = rs.getTimestamp("created_at");
-        if (createdAt != null) {
-            user.setCreatedAt(createdAt.toLocalDateTime());
-        }
-
-        Timestamp updatedAt = rs.getTimestamp("updated_at");
-        if (updatedAt != null) {
-            user.setUpdatedAt(updatedAt.toLocalDateTime());
-        }
-
-        user.setActive(rs.getBoolean("is_active"));
-        user.setVerified(rs.getBoolean("is_verified"));
-
-        return user;
-    }
+//    private static User mapResultSetToUser(ResultSet rs) throws SQLException {
+//        User user = new User();
+//
+//        user.setUserId(rs.getString("user_id"));
+//        user.setUsername(rs.getString("username"));
+//        user.setEmail(rs.getString("email"));
+//        user.setPhone(rs.getString("phone"));
+//        user.setPasswordHash(rs.getString("password_hash"));
+//        user.setSalt(rs.getString("salt"));
+//        user.setDisplayName(rs.getString("display_name"));
+//        user.setAvatarUrl(rs.getString("avatar_url"));
+//        user.setStatusMessage(rs.getString("status_message"));
+//        user.setOnline(rs.getBoolean("is_online"));
+//
+//        Timestamp lastSeen = rs.getTimestamp("last_seen");
+//        if (lastSeen != null) {
+//            user.setLastSeen(lastSeen.toLocalDateTime());
+//        }
+//
+//        Timestamp createdAt = rs.getTimestamp("created_at");
+//        if (createdAt != null) {
+//            user.setCreatedAt(createdAt.toLocalDateTime());
+//        }
+//
+//        Timestamp updatedAt = rs.getTimestamp("updated_at");
+//        if (updatedAt != null) {
+//            user.setUpdatedAt(updatedAt.toLocalDateTime());
+//        }
+//
+//        user.setActive(rs.getBoolean("is_active"));
+//        user.setVerified(rs.getBoolean("is_verified"));
+//
+//        return user;
+//    }
 
     // ==================== UTILITIES ====================
 

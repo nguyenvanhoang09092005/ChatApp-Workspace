@@ -47,6 +47,39 @@ public class UIComponentFactory {
     }
 
     // ==================== CONVERSATION ITEM ====================
+    /**
+     * Format trạng thái hoạt động của user
+     */
+    public String formatUserStatus(boolean isOnline, LocalDateTime lastSeen) {
+        if (isOnline) {
+            return "Đang hoạt động";
+        }
+
+        if (lastSeen == null) {
+            return "Không hoạt động";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        long minutesAgo = ChronoUnit.MINUTES.between(lastSeen, now);
+        long hoursAgo = ChronoUnit.HOURS.between(lastSeen, now);
+        long daysAgo = ChronoUnit.DAYS.between(lastSeen, now);
+
+        // Nếu quá 1 ngày (24 giờ) thì hiển thị "Không hoạt động"
+        if (daysAgo >= 1) {
+            return "Không hoạt động";
+        }
+
+        // Trong vòng 1 giờ - hiển thị phút
+        if (hoursAgo < 1) {
+            if (minutesAgo < 1) {
+                return "Hoạt động vừa xong";
+            }
+            return "Hoạt động " + minutesAgo + " phút trước";
+        }
+
+        // Trong vòng 24 giờ - hiển thị giờ
+        return "Hoạt động " + hoursAgo + " giờ trước";
+    }
 
     public HBox createConversationItem(Conversation conv, Consumer<Conversation> onClick) {
         HBox item = new HBox(12);
@@ -58,7 +91,7 @@ public class UIComponentFactory {
         StackPane avatarPane = new StackPane();
         ImageView avatar = createAvatar(conv.getAvatarUrl(), conv.getName(), 52);
         avatarPane.getChildren().add(avatar);
-
+// Chỉ hiển thị online indicator nếu thực sự online
         if (conv.isActive()) {
             Circle online = new Circle(7);
             online.setFill(Color.web("#31A24C"));
@@ -82,7 +115,9 @@ public class UIComponentFactory {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Label time = new Label(formatConvTime(conv.getLastMessageTime()));
+        LocalDateTime lastMsgTime = conv.getLastMessageTime();
+        Label time = new Label(formatConvTime(lastMsgTime));
+
         time.getStyleClass().add("conv-time");
 
         header.getChildren().addAll(name, spacer, time);
@@ -144,7 +179,8 @@ public class UIComponentFactory {
         HBox meta = new HBox(4);
         meta.setAlignment(isSent ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
 
-        Label time = new Label(formatMsgTime(msg.getTimestamp()));
+        Label time = new Label(formatMsgTime(msg.getTimestamp().toString()));
+
         time.getStyleClass().add("message-time");
         meta.getChildren().add(time);
 
@@ -313,8 +349,11 @@ public class UIComponentFactory {
         Label name = new Label(conv.getName());
         name.setStyle("-fx-font-size: 20px; -fx-font-weight: 700;");
 
-        Label status = new Label(conv.isActive() ? "Đang hoạt động" : "Không hoạt động");
-        status.setStyle("-fx-font-size: 13px; -fx-text-fill: #65676b;");
+        // Hiển thị trạng thái với thời gian chính xác
+        String statusText = formatUserStatus(conv.isActive(), conv.getLastSeenTime());
+        Label status = new Label(statusText);
+        status.setStyle("-fx-font-size: 13px; -fx-text-fill: " +
+                (conv.isActive() ? "#31A24C" : "#65676b") + ";");
 
         // Actions
         HBox actions = new HBox(16);
@@ -346,21 +385,32 @@ public class UIComponentFactory {
 
     // ==================== TIME FORMATTING ====================
 
-    public String formatConvTime(String timestamp) {
-        if (timestamp == null || timestamp.isEmpty()) return "";
-        try {
-            LocalDateTime dt = LocalDateTime.parse(timestamp);
-            LocalDateTime now = LocalDateTime.now();
-            long days = ChronoUnit.DAYS.between(dt.toLocalDate(), now.toLocalDate());
+    public String formatConvTime(LocalDateTime dt) {
+        if (dt == null) return "";
+        LocalDateTime now = LocalDateTime.now();
+        long days = ChronoUnit.DAYS.between(dt.toLocalDate(), now.toLocalDate());
 
-            if (days == 0) return dt.format(DateTimeFormatter.ofPattern("HH:mm"));
-            if (days == 1) return "Hôm qua";
-            if (days < 7) return dt.format(DateTimeFormatter.ofPattern("EEE"));
-            return dt.format(DateTimeFormatter.ofPattern("dd/MM"));
-        } catch (Exception e) {
-            return timestamp;
-        }
+        if (days == 0) return dt.format(DateTimeFormatter.ofPattern("HH:mm"));
+        if (days == 1) return "Hôm qua";
+        if (days < 7) return dt.format(DateTimeFormatter.ofPattern("EEE"));
+        return dt.format(DateTimeFormatter.ofPattern("dd/MM"));
     }
+
+    public String formatMsgTime(LocalDateTime dt) {
+        if (dt == null) return "";
+        return dt.format(DateTimeFormatter.ofPattern("HH:mm"));
+    }
+
+    public String extractDate(LocalDateTime dt) {
+        if (dt == null) return "Hôm nay";
+        LocalDateTime now = LocalDateTime.now();
+        long days = ChronoUnit.DAYS.between(dt.toLocalDate(), now.toLocalDate());
+
+        if (days == 0) return "Hôm nay";
+        if (days == 1) return "Hôm qua";
+        return dt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    }
+
 
     public String formatMsgTime(String timestamp) {
         if (timestamp == null) return "";

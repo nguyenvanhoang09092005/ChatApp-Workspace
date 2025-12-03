@@ -22,12 +22,14 @@ public class Conversation implements Serializable {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String lastMessage;
-    private String lastMessageTime;
+    private LocalDateTime  lastMessageTime;
+    private LocalDateTime lastSeenTime;
     private int unreadCount;
     private boolean isActive;
     private boolean isMuted;
     private boolean isPinned;
     private boolean isArchived;
+
     private Map<String, Object> settings;
 
     // ==================== CONSTRUCTORS ====================
@@ -64,7 +66,10 @@ public class Conversation implements Serializable {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public String getLastMessage() { return lastMessage; }
-    public String getLastMessageTime() { return lastMessageTime; }
+    public LocalDateTime  getLastMessageTime() { return lastMessageTime; }
+    public LocalDateTime getLastSeenTime() {
+        return lastSeenTime;
+    }
     public int getUnreadCount() { return unreadCount; }
     public boolean isActive() { return isActive; }
     public boolean isMuted() { return isMuted; }
@@ -84,7 +89,10 @@ public class Conversation implements Serializable {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public void setLastMessage(String lastMessage) { this.lastMessage = lastMessage; }
-    public void setLastMessageTime(String lastMessageTime) { this.lastMessageTime = lastMessageTime; }
+    public void setLastMessageTime(LocalDateTime  lastMessageTime) { this.lastMessageTime = lastMessageTime; }
+    public void setLastSeenTime(LocalDateTime lastSeenTime) {
+        this.lastSeenTime = lastSeenTime;
+    }
     public void setUnreadCount(int unreadCount) { this.unreadCount = unreadCount; }
     public void setActive(boolean isActive) { this.isActive = isActive; }
     public void setMuted(boolean isMuted) { this.isMuted = isMuted; }
@@ -135,27 +143,20 @@ public class Conversation implements Serializable {
     }
 
     public String getFormattedLastMessageTime() {
-        if (lastMessageTime == null || lastMessageTime.isEmpty()) {
-            return "";
-        }
+        if (lastMessageTime == null) return "";
 
-        try {
-            LocalDateTime msgTime = LocalDateTime.parse(lastMessageTime);
-            LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
 
-            if (msgTime.toLocalDate().equals(now.toLocalDate())) {
-                return msgTime.format(DateTimeFormatter.ofPattern("HH:mm"));
-            } else if (msgTime.toLocalDate().equals(now.toLocalDate().minusDays(1))) {
-                return "Hôm qua";
-            } else if (msgTime.toLocalDate().isAfter(now.toLocalDate().minusDays(7))) {
-                return msgTime.format(DateTimeFormatter.ofPattern("EEE"));
-            } else if (msgTime.getYear() == now.getYear()) {
-                return msgTime.format(DateTimeFormatter.ofPattern("dd/MM"));
-            } else {
-                return msgTime.format(DateTimeFormatter.ofPattern("dd/MM/yy"));
-            }
-        } catch (Exception e) {
-            return lastMessageTime;
+        if (lastMessageTime.toLocalDate().equals(now.toLocalDate())) {
+            return lastMessageTime.format(DateTimeFormatter.ofPattern("HH:mm"));
+        } else if (lastMessageTime.toLocalDate().equals(now.toLocalDate().minusDays(1))) {
+            return "Hôm qua";
+        } else if (lastMessageTime.toLocalDate().isAfter(now.toLocalDate().minusDays(7))) {
+            return lastMessageTime.format(DateTimeFormatter.ofPattern("EEE"));
+        } else if (lastMessageTime.getYear() == now.getYear()) {
+            return lastMessageTime.format(DateTimeFormatter.ofPattern("dd/MM"));
+        } else {
+            return lastMessageTime.format(DateTimeFormatter.ofPattern("dd/MM/yy"));
         }
     }
 
@@ -185,7 +186,7 @@ public class Conversation implements Serializable {
 
     public void updateLastMessage(String message, LocalDateTime time) {
         this.lastMessage = message;
-        this.lastMessageTime = time.toString();
+        this.lastMessageTime = time;
         this.updatedAt = time;
     }
 

@@ -9,6 +9,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 public class SocketClient {
     private static SocketClient instance;
@@ -145,12 +146,89 @@ public class SocketClient {
     /**
      * Xử lý tin nhắn nhận được từ server
      */
+//    private void handleMessage(String message) {
+//        System.out.println("📩 Nhận: " + message);
+//
+//        // Thử tìm handler cho command cụ thể
+//        String command = Protocol.getCommand(message);
+//
+//        // Xử lý USER_STATUS_CHANGED trước khi gọi handler
+//        if (Protocol.USER_STATUS_CHANGED.equals(command)) {
+//            handleUserStatusChange(message);
+//            return;
+//        }
+//
+//        Consumer<String> handler = responseHandlers.get(command);
+//        if (handler != null) {
+//            handler.accept(message);
+//            return;
+//        }
+//
+//        // Nếu không tìm thấy handler cho command, thử tìm trong tất cả handlers
+//        // (cho trường hợp dùng unique key)
+//        if (!responseHandlers.isEmpty()) {
+//            for (String key : responseHandlers.keySet()) {
+//                if (key.startsWith("REQ_")) {
+//                    responseHandlers.get(key).accept(message);
+//                    return;
+//                }
+//            }
+//        }
+//
+//        if (messageCallback != null) {
+//            messageCallback.accept(message);
+//        }
+//    }
+//    /**
+//     * Xử lý thông báo thay đổi trạng thái user
+//     */
+//    private void handleUserStatusChange(String message) {
+//        try {
+//            // Parse: USER_STATUS_CHANGED|||userId|||isOnline|||statusText|||lastSeen
+//            String[] parts = message.split(Pattern.quote(Protocol.DELIMITER));
+//            if (parts.length >= 5) {
+//                String userId = parts[1];
+//                boolean isOnline = Boolean.parseBoolean(parts[2]);
+//                String statusText = parts[3];
+//                String lastSeen = parts[4];
+//
+//                // Gọi callback nếu có
+//                Consumer<String> statusHandler = responseHandlers.get(Protocol.USER_STATUS_CHANGED);
+//                if (statusHandler != null) {
+//                    String statusData = String.join(Protocol.DELIMITER,
+//                            userId, String.valueOf(isOnline), statusText, lastSeen);
+//                    statusHandler.accept(statusData);
+//                }
+//            }
+//        } catch (Exception e) {
+//            System.err.println("⚠️ Lỗi xử lý user status change: " + e.getMessage());
+//        }
+//    }
+
     private void handleMessage(String message) {
         System.out.println("📩 Nhận: " + message);
 
-        // Thử tìm handler cho command cụ thể
+        // Parse command từ message
         String command = Protocol.getCommand(message);
 
+        // Xử lý các message đặc biệt (broadcast) trước
+        if (Protocol.USER_STATUS_CHANGED.equals(command)) {
+            System.out.println("→ Processing USER_STATUS_CHANGED");
+            handleUserStatusChange(message);
+            return;
+        }
+
+        if (Protocol.MESSAGE_RECEIVE.equals(command)) {
+            System.out.println("→ Processing MESSAGE_RECEIVE");
+            // Xử lý tin nhắn nhận được
+            Consumer<String> msgHandler = responseHandlers.get(Protocol.MESSAGE_RECEIVE);
+            if (msgHandler != null) {
+                msgHandler.accept(message);
+            }
+            return;
+        }
+
+        // Thử tìm handler cho command cụ thể
         Consumer<String> handler = responseHandlers.get(command);
         if (handler != null) {
             handler.accept(message);
@@ -168,8 +246,53 @@ public class SocketClient {
             }
         }
 
+        // Callback mặc định
         if (messageCallback != null) {
             messageCallback.accept(message);
+        }
+    }
+
+    /**
+     * Xử lý thông báo thay đổi trạng thái user
+     * Format: USER_STATUS_CHANGED|||userId|||isOnline|||statusText|||lastSeen
+     */
+    private void handleUserStatusChange(String message) {
+        try {
+            System.out.println("→ Parsing USER_STATUS_CHANGED: " + message);
+
+            String[] parts = message.split("\\|\\|\\|"); // Escape regex
+
+            if (parts.length >= 5) {
+                String userId = parts[1];
+                boolean isOnline = Boolean.parseBoolean(parts[2]);
+                String statusText = parts[3];
+                String lastSeen = parts[4];
+
+                System.out.println("  → UserID: " + userId);
+                System.out.println("  → IsOnline: " + isOnline);
+                System.out.println("  → StatusText: " + statusText);
+                System.out.println("  → LastSeen: " + lastSeen);
+
+                // Gọi handler nếu có
+                Consumer<String> statusHandler = responseHandlers.get(Protocol.USER_STATUS_CHANGED);
+                if (statusHandler != null) {
+                    // Gửi data đã parse về handler
+                    String statusData = userId + Protocol.DELIMITER +
+                            isOnline + Protocol.DELIMITER +
+                            statusText + Protocol.DELIMITER +
+                            lastSeen;
+
+                    statusHandler.accept(statusData);
+                    System.out.println("  ✅ Handler executed");
+                } else {
+                    System.out.println("  ⚠️ No handler registered for USER_STATUS_CHANGED");
+                }
+            } else {
+                System.err.println("  ⚠️ Invalid USER_STATUS_CHANGED format: " + parts.length + " parts");
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Lỗi xử lý user status change: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

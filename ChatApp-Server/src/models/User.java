@@ -1,7 +1,9 @@
 package models;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 /**
@@ -21,6 +23,9 @@ public class User implements Serializable {
     private String avatarUrl;
     private String statusMessage;
     private boolean isOnline;
+    private String bio;
+    private String gender;
+    private LocalDate birthday;
     private LocalDateTime lastSeen;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -48,6 +53,21 @@ public class User implements Serializable {
     }
 
     // ==================== GETTERS ====================
+    public String getGender() {
+        return gender;
+    }
+
+    public void setGender(String gender) {
+        this.gender = gender;
+    }
+
+    public LocalDate getBirthday() {
+        return birthday;
+    }
+
+    public void setBirthday(LocalDate birthday) {
+        this.birthday = birthday;
+    }
 
     public String getUserId() {
         return userId;
@@ -207,12 +227,41 @@ public class User implements Serializable {
      * Get status text
      */
     public String getStatusText() {
-        if (statusMessage != null && !statusMessage.isEmpty()) {
-            return statusMessage;
+        if (isOnline) {
+            return "Đang hoạt động";
         }
-        return isOnline ? "Đang hoạt động" : "Ngoại tuyến";
+
+        if (lastSeen == null) {
+            return "Không hoạt động";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        long minutesAgo = ChronoUnit.MINUTES.between(lastSeen, now);
+        long hoursAgo = ChronoUnit.HOURS.between(lastSeen, now);
+        long daysAgo = ChronoUnit.DAYS.between(lastSeen, now);
+
+        if (daysAgo >= 1) {
+            return "Không hoạt động";
+        } else if (hoursAgo >= 1) {
+            return "Hoạt động " + hoursAgo + " giờ trước";
+        } else if (minutesAgo >= 1) {
+            return "Hoạt động " + minutesAgo + " phút trước";
+        } else {
+            return "Hoạt động vừa xong";
+        }
     }
 
+    /**
+     * Check if user was active within last 24 hours
+     */
+    public boolean isActiveWithin24Hours() {
+        if (isOnline) return true;
+        if (lastSeen == null) return false;
+
+        LocalDateTime now = LocalDateTime.now();
+        long hoursAgo = ChronoUnit.HOURS.between(lastSeen, now);
+        return hoursAgo < 24;
+    }
     /**
      * Clone user without sensitive data (for sending to clients)
      */
@@ -261,5 +310,13 @@ public class User implements Serializable {
     @Override
     public int hashCode() {
         return userId.hashCode();
+    }
+
+    public void setBio(String bio) {
+        this.bio = bio;
+    }
+
+    public String getBio() {
+        return bio;
     }
 }

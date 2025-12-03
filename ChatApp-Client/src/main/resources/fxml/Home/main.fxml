@@ -9,8 +9,8 @@
 <BorderPane xmlns="http://javafx.com/javafx"
             xmlns:fx="http://javafx.com/fxml"
             fx:controller="org.example.chatappclient.client.controllers.main.MainController"
-            prefHeight="800.0" prefWidth="1400.0"
             styleClass="root">
+
 
     <!-- LEFT SIDEBAR - Navigation -->
     <left>
@@ -307,8 +307,12 @@
 
     <!-- RIGHT SIDEBAR - Chat Info (Optional) -->
     <right>
-        <VBox fx:id="infoSidebar" styleClass="info-sidebar" prefWidth="320" visible="false" managed="false">
-            <!-- Will be populated when chat info button is clicked -->
+        <VBox fx:id="infoSidebar"
+              styleClass="info-sidebar"
+              prefWidth="320"
+              visible="false"
+              managed="false">
         </VBox>
     </right>
+
 </BorderPane>

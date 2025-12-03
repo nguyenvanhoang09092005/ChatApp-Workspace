@@ -3,13 +3,19 @@ package server;
 import database.dao.UserDAO;
 import models.User;
 import protocol.Protocol;
+import server.handlers.*;
 import utils.EncryptionUtil;
 import utils.ValidationUtil;
 import utils.EmailUtil;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.List;
 
+/**
+ * ClientHandler - Xử lý kết nối và yêu cầu từ client
+ * Updated with online status management
+ */
 public class ClientHandler implements Runnable {
 
     private Socket socket;
@@ -19,10 +25,22 @@ public class ClientHandler implements Runnable {
     private String userId;
     private boolean isConnected;
 
+    // Handlers
+    private ContactHandler contactHandler;
+    private ConversationHandler conversationHandler;
+    private MessageHandler messageHandler;
+    private NotificationHandler notificationHandler;
+
     public ClientHandler(Socket socket, ChatServer server) {
         this.socket = socket;
         this.server = server;
         this.isConnected = true;
+
+        // Initialize handlers
+        this.contactHandler = new ContactHandler(this);
+        this.conversationHandler = new ConversationHandler(this);
+        this.messageHandler = new MessageHandler(this);
+        this.notificationHandler = new NotificationHandler(this);
     }
 
     @Override
@@ -32,6 +50,8 @@ public class ClientHandler implements Runnable {
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             out = new PrintWriter(socket.getOutputStream(), true);
 
+            System.out.println("✓ Client connected from: " + socket.getInetAddress().getHostAddress());
+
             // Handle client messages
             String message;
             while (isConnected && (message = in.readLine()) != null) {
@@ -39,8 +59,11 @@ public class ClientHandler implements Runnable {
             }
 
         } catch (IOException e) {
-            System.err.println("Client handler error: " + e.getMessage());
+            if (isConnected) {
+                System.err.println("⚠️ Client handler error: " + e.getMessage());
+            }
         } finally {
+            // IMPORTANT: Always call disconnect when connection ends
             disconnect();
         }
     }
@@ -49,16 +72,36 @@ public class ClientHandler implements Runnable {
      * Handle incoming messages from client
      */
     private void handleMessage(String message) {
-        System.out.println("← Received from client: " + message);
+        System.out.println("← Received: " + message);
+
         String[] parts = Protocol.parseMessage(message);
         if (parts.length == 0) {
-            System.out.println("→ Empty message received");
+            System.out.println("⚠️ Empty message received");
             return;
         }
 
         String messageType = parts[0];
-        System.out.println("→ Message type: " + messageType);
+        System.out.println("→ Processing: " + messageType);
 
+        // Route to appropriate handler
+        if (messageType.startsWith("CONTACT_")) {
+            contactHandler.handle(messageType, parts);
+        } else if (messageType.startsWith("CONVERSATION_")) {
+            conversationHandler.handle(messageType, parts);
+        } else if (messageType.startsWith("MESSAGE_") || messageType.startsWith("TYPING_")) {
+            messageHandler.handle(messageType, parts);
+        } else if (messageType.startsWith("NOTIFICATION_")) {
+            notificationHandler.handle(messageType, parts);
+        } else {
+            // Handle auth and user commands directly
+            handleDirectCommands(messageType, parts);
+        }
+    }
+
+    /**
+     * Handle auth and user commands directly
+     */
+    private void handleDirectCommands(String messageType, String[] parts) {
         switch (messageType) {
             // ==================== AUTH ====================
             case Protocol.REGISTER:
@@ -110,57 +153,6 @@ public class ClientHandler implements Runnable {
                 handleGetOnlineStatus(parts);
                 break;
 
-            // ==================== CONVERSATION ====================
-            case Protocol.CONVERSATION_GET_ALL:
-                handleConversationGetAll(parts);
-                break;
-
-            case Protocol.CONVERSATION_GET:
-                handleConversationGet(parts);
-                break;
-
-            case Protocol.CONVERSATION_CREATE:
-                handleConversationCreate(parts);
-                break;
-
-            case Protocol.CONVERSATION_DELETE:
-                handleConversationDelete(parts);
-                break;
-
-            // ==================== MESSAGE ====================
-            case Protocol.MESSAGE_SEND:
-                handleMessageSend(parts);
-                break;
-
-            case Protocol.MESSAGE_GET_HISTORY:
-                handleMessageGetHistory(parts);
-                break;
-
-            case Protocol.MESSAGE_MARK_READ:
-                handleMessageMarkRead(parts);
-                break;
-
-            case Protocol.TYPING_START:
-                handleTypingStart(parts);
-                break;
-
-            case Protocol.TYPING_STOP:
-                handleTypingStop(parts);
-                break;
-
-            // ==================== CONTACT ====================
-            case Protocol.CONTACT_GET_ALL:
-                handleContactGetAll(parts);
-                break;
-
-            case Protocol.CONTACT_ADD:
-                handleContactAdd(parts);
-                break;
-
-            case Protocol.CONTACT_REMOVE:
-                handleContactRemove(parts);
-                break;
-
             default:
                 sendMessage(Protocol.buildErrorResponse(
                         Protocol.ERR_SERVER_ERROR,
@@ -175,7 +167,7 @@ public class ClientHandler implements Runnable {
      * Handle user registration
      */
     private void handleRegister(String[] parts) {
-        System.out.println("→ Handling register: " + String.join("|", parts));
+        System.out.println("→ Handling register");
 
         if (parts.length < 4) {
             sendMessage(Protocol.buildErrorResponse(
@@ -241,7 +233,6 @@ public class ClientHandler implements Runnable {
         user.setDisplayName(username);
 
         boolean created = UserDAO.createUser(user);
-        System.out.println("→ UserDAO.createUser returned: " + created);
 
         if (created) {
             // Generate and send verification code
@@ -254,7 +245,7 @@ public class ClientHandler implements Runnable {
                     user.getUserId()
             ));
 
-            System.out.println("✓ New user registered: " + username);
+            System.out.println("✅ New user registered: " + username);
         } else {
             sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_DATABASE_ERROR,
@@ -320,27 +311,35 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        // Update online status
+        // ========== UPDATE ONLINE STATUS ==========
+        // Update user status to online in database
         UserDAO.updateOnlineStatus(user.getUserId(), true);
 
-        // Register client
+        // Register client with server
         this.userId = user.getUserId();
         server.addClient(userId, this);
 
+        // Broadcast online status to all other connected clients
+        server.broadcastUserStatus(userId, true);
+
+        System.out.println("✅ User logged in: " + user.getUsername() + " (ID: " + userId + ")");
+
         // Send success response with user data
-        String userData = String.format("%s%s%s%s%s%s%s",
+        String userData = String.format("%s%s%s%s%s%s%s%s%s%s%s",
                 user.getUserId(),
                 Protocol.ARRAY_SEPARATOR,
                 user.getUsername(),
                 Protocol.ARRAY_SEPARATOR,
                 user.getEmail(),
                 Protocol.ARRAY_SEPARATOR,
-                user.getDisplayName()
+                user.getDisplayName(),
+                Protocol.ARRAY_SEPARATOR,
+                user.getAvatarUrl() != null ? user.getAvatarUrl() : "",
+                Protocol.ARRAY_SEPARATOR,
+                user.getBio() != null ? user.getBio() : ""
         );
 
         sendMessage(Protocol.buildSuccessResponse("Login successful", userData));
-
-        System.out.println("✓ User logged in: " + user.getUsername());
     }
 
     /**
@@ -371,7 +370,7 @@ public class ClientHandler implements Runnable {
                         "Email verified successfully"
                 ));
 
-                System.out.println("✓ Email verified: " + email);
+                System.out.println("✅ Email verified: " + email);
             } else {
                 sendMessage(Protocol.buildErrorResponse(
                         Protocol.ERR_DATABASE_ERROR,
@@ -463,10 +462,21 @@ public class ClientHandler implements Runnable {
      */
     private void handleLogout() {
         if (userId != null) {
+            System.out.println("→ User logging out: " + userId);
+
+            // Update online status to offline and update last_seen
             UserDAO.updateOnlineStatus(userId, false);
+
+            // Broadcast offline status to all other clients
+            server.broadcastUserStatus(userId, false);
+
+            // Remove from server's connected clients
             server.removeClient(userId);
-            System.out.println("✓ User logged out: " + userId);
+
+            System.out.println("✅ User logged out: " + userId);
         }
+
+        // Disconnect the client
         disconnect();
     }
 
@@ -520,6 +530,7 @@ public class ClientHandler implements Runnable {
 
         if (UserDAO.updatePassword(userId, newHash, newSalt)) {
             sendMessage(Protocol.buildSuccessResponse("Password changed successfully"));
+            System.out.println("✅ Password changed for user: " + userId);
         } else {
             sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_DATABASE_ERROR,
@@ -532,7 +543,17 @@ public class ClientHandler implements Runnable {
      * Handle profile update
      */
     private void handleUpdateProfile(String[] parts) {
-        // TODO: Implement profile update
+        if (parts.length < 2 || userId == null) {
+            sendMessage(Protocol.buildErrorResponse(
+                    Protocol.ERR_SERVER_ERROR,
+                    "Invalid request"
+            ));
+            return;
+        }
+
+        // TODO: Parse and update profile data
+        // Format: USER_UPDATE_PROFILE|||displayName|||bio|||avatarUrl|||...
+
         sendMessage(Protocol.buildSuccessResponse("Profile updated"));
     }
 
@@ -540,140 +561,151 @@ public class ClientHandler implements Runnable {
      * Handle get profile
      */
     private void handleGetProfile(String[] parts) {
-        // TODO: Implement get profile
-        sendMessage(Protocol.buildSuccessResponse("Profile data", "{}"));
+        if (parts.length < 2) {
+            sendMessage(Protocol.buildErrorResponse(
+                    Protocol.ERR_SERVER_ERROR,
+                    "Invalid request"
+            ));
+            return;
+        }
+
+        String targetUserId = parts[1];
+        User user = UserDAO.findById(targetUserId);
+
+        if (user != null) {
+            String userData = buildUserData(user);
+            sendMessage(Protocol.buildSuccessResponse("Profile data", userData));
+        } else {
+            sendMessage(Protocol.buildErrorResponse(
+                    Protocol.ERR_NOT_FOUND,
+                    "User not found"
+            ));
+        }
     }
 
     /**
      * Handle user search
      */
     private void handleUserSearch(String[] parts) {
-        // TODO: Implement user search
-        sendMessage(Protocol.buildSuccessResponse("Search results", "[]"));
-    }
-
-    /**
-     * Handle get online status
-     */
-    private void handleGetOnlineStatus(String[] parts) {
-        // TODO: Implement get online status
-        sendMessage(Protocol.buildSuccessResponse("Online status", "[]"));
-    }
-
-    // ==================== CONVERSATION HANDLERS ====================
-
-    /**
-     * Handle get all conversations
-     */
-    private void handleConversationGetAll(String[] parts) {
-        if (userId == null) {
+        if (parts.length < 2) {
             sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "User not authenticated"
+                    "Invalid search query"
             ));
             return;
         }
 
-        // TODO: Implement get all conversations from database
-        // For now, return empty list
+        String query = parts[1].trim();
+
+        if (query.isEmpty()) {
+            sendMessage(Protocol.buildErrorResponse(
+                    Protocol.ERR_SERVER_ERROR,
+                    "Search query cannot be empty"
+            ));
+            return;
+        }
+
+        System.out.println("→ Searching for user: " + query);
+
+        // Try exact match first (email or phone)
+        User user = UserDAO.findByEmailOrPhone(query);
+
+        if (user != null) {
+            // Found exact match
+            String userData = buildUserData(user);
+            sendMessage(Protocol.buildSuccessResponse(
+                    "User found",
+                    userData
+            ));
+            System.out.println("✅ Found user by email/phone: " + user.getUsername());
+            return;
+        }
+
+        // If no exact match, try keyword search
+        List<User> users = UserDAO.searchByKeyword(query, 10);
+
+        if (users.isEmpty()) {
+            sendMessage(Protocol.buildSuccessResponse(
+                    "No users found",
+                    ""
+            ));
+            System.out.println("→ No users found for query: " + query);
+            return;
+        }
+
+        // Build response with multiple users
+        StringBuilder data = new StringBuilder();
+        for (int i = 0; i < users.size(); i++) {
+            if (i > 0) data.append(Protocol.FIELD_DELIMITER);
+            data.append(buildUserData(users.get(i)));
+        }
+
         sendMessage(Protocol.buildSuccessResponse(
-                "Conversations retrieved",
-                "[]"
+                "Users found: " + users.size(),
+                data.toString()
         ));
 
-        System.out.println("✓ Sent empty conversation list to user: " + userId);
+        System.out.println("✅ Found " + users.size() + " users for query: " + query);
     }
 
     /**
-     * Handle get conversation
+     * Build user data string for response
+     * Format: userId,username,email,displayName,avatarUrl,phone,statusMessage,isOnline,statusText
      */
-    private void handleConversationGet(String[] parts) {
-        // TODO: Implement get specific conversation
-        sendMessage(Protocol.buildSuccessResponse("Conversation data", "{}"));
+    private String buildUserData(User user) {
+        return String.format("%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+                user.getUserId(),
+                Protocol.LIST_DELIMITER,
+                user.getUsername(),
+                Protocol.LIST_DELIMITER,
+                user.getEmail(),
+                Protocol.LIST_DELIMITER,
+                user.getDisplayName() != null ? user.getDisplayName() : user.getUsername(),
+                Protocol.LIST_DELIMITER,
+                user.getAvatarUrl() != null ? user.getAvatarUrl() : "",
+                Protocol.LIST_DELIMITER,
+                user.getPhone() != null ? user.getPhone() : "",
+                Protocol.LIST_DELIMITER,
+                user.getStatusMessage() != null ? user.getStatusMessage() : "",
+                Protocol.LIST_DELIMITER,
+                user.isOnline(),
+                Protocol.LIST_DELIMITER,
+                user.getStatusText() // "Đang hoạt động" or "Hoạt động X phút/giờ trước" or "Không hoạt động"
+        );
     }
 
     /**
-     * Handle create conversation
+     * Handle get online status - Lấy trạng thái online của user
      */
-    private void handleConversationCreate(String[] parts) {
-        // TODO: Implement create conversation
-        sendMessage(Protocol.buildSuccessResponse("Conversation created", "{}"));
-    }
+    private void handleGetOnlineStatus(String[] parts) {
+        if (parts.length < 2) {
+            sendMessage(Protocol.buildErrorResponse(
+                    Protocol.ERR_SERVER_ERROR,
+                    "Invalid request"
+            ));
+            return;
+        }
 
-    /**
-     * Handle delete conversation
-     */
-    private void handleConversationDelete(String[] parts) {
-        // TODO: Implement delete conversation
-        sendMessage(Protocol.buildSuccessResponse("Conversation deleted"));
-    }
+        String targetUserId = parts[1];
+        User user = UserDAO.findById(targetUserId);
 
-    // ==================== MESSAGE HANDLERS ====================
+        if (user != null) {
+            StringBuilder data = new StringBuilder();
+            data.append(user.getUserId())
+                    .append(Protocol.LIST_DELIMITER)
+                    .append(user.isOnline())
+                    .append(Protocol.LIST_DELIMITER)
+                    .append(user.getStatusText())
+                    .append(Protocol.LIST_DELIMITER)
+                    .append(user.getLastSeen() != null ? user.getLastSeen().toString() : "");
 
-    /**
-     * Handle send message
-     */
-    private void handleMessageSend(String[] parts) {
-        // TODO: Implement send message
-        sendMessage(Protocol.buildSuccessResponse("Message sent", "{}"));
-    }
-
-    /**
-     * Handle get message history
-     */
-    private void handleMessageGetHistory(String[] parts) {
-        // TODO: Implement get message history
-        sendMessage(Protocol.buildSuccessResponse("Message history", "[]"));
-    }
-
-    /**
-     * Handle mark message as read
-     */
-    private void handleMessageMarkRead(String[] parts) {
-        // TODO: Implement mark message as read
-        sendMessage(Protocol.buildSuccessResponse("Message marked as read"));
-    }
-
-    /**
-     * Handle typing start
-     */
-    private void handleTypingStart(String[] parts) {
-        // TODO: Broadcast typing status to other users
-        System.out.println("User " + userId + " started typing");
-    }
-
-    /**
-     * Handle typing stop
-     */
-    private void handleTypingStop(String[] parts) {
-        // TODO: Broadcast typing status to other users
-        System.out.println("User " + userId + " stopped typing");
-    }
-
-    // ==================== CONTACT HANDLERS ====================
-
-    /**
-     * Handle get all contacts
-     */
-    private void handleContactGetAll(String[] parts) {
-        // TODO: Implement get all contacts
-        sendMessage(Protocol.buildSuccessResponse("Contacts retrieved", "[]"));
-    }
-
-    /**
-     * Handle add contact
-     */
-    private void handleContactAdd(String[] parts) {
-        // TODO: Implement add contact
-        sendMessage(Protocol.buildSuccessResponse("Contact added"));
-    }
-
-    /**
-     * Handle remove contact
-     */
-    private void handleContactRemove(String[] parts) {
-        // TODO: Implement remove contact
-        sendMessage(Protocol.buildSuccessResponse("Contact removed"));
+            sendMessage(Protocol.buildSuccessResponse("Online status", data.toString()));
+        } else {
+            sendMessage(Protocol.buildErrorResponse(
+                    Protocol.ERR_NOT_FOUND,
+                    "User not found"
+            ));
+        }
     }
 
     // ==================== UTILITY METHODS ====================
@@ -682,36 +714,74 @@ public class ClientHandler implements Runnable {
      * Send message to client
      */
     public boolean sendMessage(String message) {
-        if (out != null) {
-            out.println(message);
-            out.flush();
-            System.out.println("→ Sent to client: " + message);
-            return true;
+        if (out != null && !socket.isClosed()) {
+            try {
+                out.println(message);
+                out.flush();
+                System.out.println("→ Sent: " + message);
+                return true;
+            } catch (Exception e) {
+                System.err.println("⚠️ Error sending message: " + e.getMessage());
+                return false;
+            }
         }
         return false;
     }
 
     /**
-     * Disconnect client
+     * Disconnect client - Cleanup and update status
      */
     public void disconnect() {
-        isConnected = false;
-
-        if (userId != null) {
-            UserDAO.updateOnlineStatus(userId, false);
-            server.removeClient(userId);
+        if (!isConnected) {
+            return; // Already disconnected
         }
 
+        isConnected = false;
+
+        // Update user status if logged in
+        if (userId != null) {
+            System.out.println("→ Disconnecting user: " + userId);
+
+            // Update online status to offline and set last_seen
+            UserDAO.updateOnlineStatus(userId, false);
+
+            // Broadcast offline status to all other clients
+            server.broadcastUserStatus(userId, false);
+
+            // Remove from server's connected clients
+            server.removeClient(userId);
+
+            System.out.println("✅ User disconnected: " + userId);
+            userId = null;
+        }
+
+        // Close all connections
         try {
-            if (in != null) in.close();
-            if (out != null) out.close();
-            if (socket != null && !socket.isClosed()) socket.close();
+            if (in != null) {
+                in.close();
+            }
+            if (out != null) {
+                out.close();
+            }
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
         } catch (IOException e) {
-            System.err.println("Error closing client connection: " + e.getMessage());
+            System.err.println("⚠️ Error closing client connection: " + e.getMessage());
         }
     }
 
+    // ==================== GETTERS ====================
+
     public String getUserId() {
         return userId;
+    }
+
+    public ChatServer getServer() {
+        return server;
+    }
+
+    public boolean isConnected() {
+        return isConnected;
     }
 }

@@ -76,9 +76,27 @@ public class Message implements Serializable {
     public String getFileName() { return fileName; }
     public long getFileSize() { return fileSize; }
     public String getThumbnailUrl() { return thumbnailUrl; }
-    public String getTimestamp() {
+    // Trả đúng LocalDateTime
+    public LocalDateTime getTimestamp() {
+        return timestamp;
+    }
+
+
+    // Nếu cần format thành String, tạo method riêng
+    public String getFormattedTimestamp() {
         if (timestamp == null) return "";
-        return timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime msgTime = timestamp;
+
+        if (msgTime.toLocalDate().equals(now.toLocalDate())) {
+            return msgTime.format(DateTimeFormatter.ofPattern("HH:mm"));
+        } else if (msgTime.toLocalDate().equals(now.toLocalDate().minusDays(1))) {
+            return "Hôm qua " + msgTime.format(DateTimeFormatter.ofPattern("HH:mm"));
+        } else if (msgTime.getYear() == now.getYear()) {
+            return msgTime.format(DateTimeFormatter.ofPattern("dd/MM HH:mm"));
+        } else {
+            return msgTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+        }
     }
 
     public boolean isRead() { return isRead; }
@@ -128,22 +146,6 @@ public class Message implements Serializable {
                 TYPE_AUDIO.equals(messageType) ||
                 TYPE_VIDEO.equals(messageType) ||
                 TYPE_FILE.equals(messageType);
-    }
-
-    public String getFormattedTimestamp() {
-        if (timestamp == null) return "";
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime msgTime = timestamp;
-
-        if (msgTime.toLocalDate().equals(now.toLocalDate())) {
-            return msgTime.format(DateTimeFormatter.ofPattern("HH:mm"));
-        } else if (msgTime.toLocalDate().equals(now.toLocalDate().minusDays(1))) {
-            return "Hôm qua " + msgTime.format(DateTimeFormatter.ofPattern("HH:mm"));
-        } else if (msgTime.getYear() == now.getYear()) {
-            return msgTime.format(DateTimeFormatter.ofPattern("dd/MM HH:mm"));
-        } else {
-            return msgTime.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
-        }
     }
 
     public String getFormattedFileSize() {

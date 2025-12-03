@@ -12,6 +12,7 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.example.chatappclient.client.models.User;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -24,7 +25,11 @@ public class DialogFactory {
 
     // ==================== NEW CHAT DIALOG ====================
 
+    /**
+     * Hiển thị dialog tìm kiếm và tạo cuộc trò chuyện mới (legacy - trả về String)
+     */
     public static void showNewChatDialog(Consumer<String> onResult) {
+        // Không sử dụng nữa - giữ lại để tương thích
         Dialog<String> dialog = new Dialog<>();
         dialog.setTitle("Tin nhắn mới");
         dialog.setHeaderText(null);
@@ -40,81 +45,145 @@ public class DialogFactory {
         searchField.setPromptText("Nhập tên, email hoặc số điện thoại...");
         searchField.setStyle("-fx-padding: 12; -fx-font-size: 14px;");
 
-        // Search results placeholder
-        VBox resultsBox = new VBox(8);
-        resultsBox.setMinHeight(200);
-        Label hint = new Label("Tìm kiếm người dùng để bắt đầu chat");
-        hint.setStyle("-fx-text-fill: #65676b;");
-        resultsBox.getChildren().add(hint);
-
-        content.getChildren().addAll(title, searchField, resultsBox);
+        content.getChildren().addAll(title, searchField);
 
         dialog.getDialogPane().setContent(content);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
         Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
         okBtn.setText("Bắt đầu chat");
-        okBtn.setStyle("-fx-background-color: #0084ff; -fx-text-fill: white;");
 
         dialog.setResultConverter(btn -> btn == ButtonType.OK ? searchField.getText() : null);
         dialog.showAndWait().ifPresent(onResult);
     }
 
-    // ==================== CREATE GROUP DIALOG ====================
-
-    public static void showCreateGroupDialog(BiConsumer<String, List<String>> onResult) {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Tạo nhóm mới");
-        dialog.setHeaderText(null);
-
-        VBox content = new VBox(16);
-        content.setPadding(new Insets(20));
-        content.setPrefWidth(450);
-
-        Label title = new Label("Tạo nhóm chat");
-        title.setStyle("-fx-font-size: 18px; -fx-font-weight: 700;");
-
-        // Group name
-        VBox nameBox = new VBox(6);
-        Label nameLabel = new Label("Tên nhóm");
-        nameLabel.setStyle("-fx-font-weight: 600;");
-        TextField nameField = new TextField();
-        nameField.setPromptText("Đặt tên cho nhóm...");
-        nameField.setStyle("-fx-padding: 12;");
-        nameBox.getChildren().addAll(nameLabel, nameField);
-
-        // Add members
-        VBox membersBox = new VBox(6);
-        Label membersLabel = new Label("Thêm thành viên");
-        membersLabel.setStyle("-fx-font-weight: 600;");
-        TextField memberSearch = new TextField();
-        memberSearch.setPromptText("Tìm kiếm để thêm...");
-        memberSearch.setStyle("-fx-padding: 12;");
-
-        // Selected members
-        FlowPane selectedMembers = new FlowPane(8, 8);
-        selectedMembers.setMinHeight(50);
-
-        membersBox.getChildren().addAll(membersLabel, memberSearch, selectedMembers);
-
-        content.getChildren().addAll(title, nameBox, membersBox);
-
-        dialog.getDialogPane().setContent(content);
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okBtn.setText("Tạo nhóm");
-        okBtn.setStyle("-fx-background-color: #0084ff; -fx-text-fill: white;");
-
-        dialog.showAndWait().ifPresent(result -> {
-            if (result == ButtonType.OK) {
-                String groupName = nameField.getText().trim();
-                // TODO: Get selected member IDs
-                onResult.accept(groupName, List.of());
-            }
-        });
+    /**
+     * Hiển thị dialog tìm kiếm người dùng mới (trả về User object)
+     */
+    public static void showUserSearchDialog(Consumer<User> onUserSelected) {
+        UserSearchDialog dialog = new UserSearchDialog(onUserSelected);
+        dialog.show();
     }
 
+    /**
+     * Hiển thị dialog tạo nhóm
+     */
+    public static void showCreateGroupDialog(BiConsumer<String, List<String>> onConfirm) {
+        Stage dialog = new Stage();
+        dialog.initModality(Modality.APPLICATION_MODAL);
+        dialog.setTitle("Tạo nhóm mới");
+        dialog.setWidth(400);
+        dialog.setHeight(500);
+
+        VBox root = new VBox(15);
+        root.setPadding(new Insets(20));
+
+        // Group name
+        Label nameLabel = new Label("Tên nhóm:");
+        TextField nameField = new TextField();
+        nameField.setPromptText("Nhập tên nhóm...");
+
+        // Member selection
+        Label memberLabel = new Label("Thêm thành viên:");
+
+        // Search field for members
+        TextField searchField = new TextField();
+        searchField.setPromptText("Tìm kiếm bạn bè...");
+
+        // Selected members list
+        ListView<String> selectedMembers = new ListView<>();
+        selectedMembers.setPrefHeight(200);
+
+        // Add member button
+        Button addMemberButton = new Button("Thêm thành viên");
+        addMemberButton.setOnAction(e -> {
+            // TODO: Implement member selection dialog
+            AlertUtil.showToastInfo("Chức năng đang phát triển");
+        });
+
+        // Action buttons
+        HBox buttons = new HBox(10);
+        Button cancelButton = new Button("Hủy");
+        Button createButton = new Button("Tạo nhóm");
+        createButton.setDefaultButton(true);
+
+        cancelButton.setOnAction(e -> dialog.close());
+        createButton.setOnAction(e -> {
+            String groupName = nameField.getText().trim();
+            if (groupName.isEmpty()) {
+                AlertUtil.showToastError("Vui lòng nhập tên nhóm");
+                return;
+            }
+
+            List<String> memberIds = new ArrayList<>(selectedMembers.getItems());
+            if (onConfirm != null) {
+                onConfirm.accept(groupName, memberIds);
+            }
+            dialog.close();
+        });
+
+        buttons.getChildren().addAll(cancelButton, createButton);
+
+        root.getChildren().addAll(
+                nameLabel, nameField,
+                memberLabel, searchField,
+                selectedMembers,
+                addMemberButton,
+                buttons
+        );
+
+        Scene scene = new Scene(root);
+        dialog.setScene(scene);
+        dialog.showAndWait();
+    }
+
+    /**
+     * Hiển thị dialog xác nhận
+     */
+    public static boolean showConfirmDialog(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+
+        return alert.showAndWait()
+                .filter(response -> response == ButtonType.OK)
+                .isPresent();
+    }
+
+    /**
+     * Hiển thị dialog thông tin
+     */
+    public static void showInfoDialog(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    /**
+     * Hiển thị dialog lỗi
+     */
+    public static void showErrorDialog(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    /**
+     * Hiển thị dialog nhập text
+     */
+    public static String showInputDialog(String title, String message, String defaultValue) {
+        TextInputDialog dialog = new TextInputDialog(defaultValue);
+        dialog.setTitle(title);
+        dialog.setHeaderText(null);
+        dialog.setContentText(message);
+
+        return dialog.showAndWait().orElse(null);
+    }
     // ==================== SETTINGS DIALOG ====================
 
     public static void showSettingsDialog(User currentUser, Runnable onLogout) {

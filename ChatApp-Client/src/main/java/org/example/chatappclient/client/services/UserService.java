@@ -115,4 +115,11 @@ public class UserService {
         if (f.length > 8) u.setOnline(Boolean.parseBoolean(f[8]));
         return u;
     }
+    public User findUserByEmailOrPhone(String query) throws Exception {
+        List<User> users = searchUsers(query);
+        if (users.isEmpty()) return null;
+        return users.get(0);
+    }
+
+
 }

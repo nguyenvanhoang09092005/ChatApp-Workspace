@@ -29,6 +29,7 @@ public class Protocol {
     public static final String USER_CHANGE_PASSWORD = "USER_CHANGE_PASSWORD";
     public static final String USER_SEARCH = "USER_SEARCH";
     public static final String USER_GET_ONLINE_STATUS = "USER_GET_ONLINE_STATUS";
+    public static final String USER_STATUS_CHANGED = "USER_STATUS_CHANGED";
 
     // ==================== CONTACT COMMANDS ====================
     public static final String CONTACT_GET_ALL = "CONTACT_GET_ALL";
@@ -69,6 +70,9 @@ public class Protocol {
     public static final String CONVERSATION_PIN = "CONVERSATION_PIN";
     public static final String CONVERSATION_ARCHIVE = "CONVERSATION_ARCHIVE";
     public static final String CONVERSATION_UNARCHIVE = "CONVERSATION_UNARCHIVE";
+
+    public static final String ERR_NOT_FOUND = "ERR_NOT_FOUND";
+
 
     // ==================== CALL COMMANDS ====================
     public static final String CALL_START = "CALL_START";

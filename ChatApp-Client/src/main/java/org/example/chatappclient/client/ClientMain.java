@@ -1,6 +1,8 @@
 package org.example.chatappclient.client;
 
 
+import javafx.geometry.Rectangle2D;
+import javafx.stage.Screen;
 import org.example.chatappclient.client.config.AppConfig;
 import org.example.chatappclient.client.config.Constants;
 import javafx.application.Application;
@@ -14,15 +16,20 @@ public class ClientMain extends Application {
     @Override
     public void start(Stage primaryStage) {
         try {
-            // Load configuration
+            // Load config
             AppConfig config = AppConfig.getInstance();
 
             // Load login view
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/auth/login.fxml"));
             Parent root = loader.load();
 
-            // Create scene
-            Scene scene = new Scene(root, 900, 600);
+            // Lấy kích thước màn hình
+            Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+
+            double width = screenBounds.getWidth() * 0.5;
+            double height = screenBounds.getHeight() * 0.55;
+            Scene scene = new Scene(root, width, height);
+
 
             // Add CSS
             scene.getStylesheets().add(getClass().getResource("/css/auth/login.css").toExternalForm());
@@ -30,16 +37,18 @@ public class ClientMain extends Application {
             // Setup stage
             primaryStage.setTitle(Constants.APP_NAME);
             primaryStage.setScene(scene);
+
+            // Minimum size
             primaryStage.setMinWidth(Constants.WINDOW_MIN_WIDTH);
             primaryStage.setMinHeight(Constants.WINDOW_MIN_HEIGHT);
 
-            // Show stage
-            primaryStage.show();
+            primaryStage.show();     // Quan trọng: phải show trước
 
-            // Handle close request
-            primaryStage.setOnCloseRequest(event -> {
-                handleClose();
-            });
+            // Căn giữa cửa sổ trên màn hình
+            primaryStage.centerOnScreen();
+
+            // Handle close
+            primaryStage.setOnCloseRequest(event -> handleClose());
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -47,17 +56,13 @@ public class ClientMain extends Application {
         }
     }
 
-    /**
-     * Handle application close
-     */
     private void handleClose() {
         try {
-            // Disconnect from server
+            // Disconnect
             SocketClient client = SocketClient.getInstance();
             if (client.isConnected()) {
                 client.disconnect();
             }
-
             System.out.println("Application closed");
 
         } catch (Exception e) {
@@ -74,3 +79,4 @@ public class ClientMain extends Application {
         launch(args);
     }
 }
+
