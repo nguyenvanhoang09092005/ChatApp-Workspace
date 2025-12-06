@@ -22,6 +22,9 @@ public class ClientHandler implements Runnable {
     private ChatServer server;
     private BufferedReader in;
     private PrintWriter out;
+
+    private InputStream rawInputStream;
+    private OutputStream rawOutputStream;
     private String userId;
     private boolean isConnected;
 
@@ -30,6 +33,7 @@ public class ClientHandler implements Runnable {
     private ConversationHandler conversationHandler;
     private MessageHandler messageHandler;
     private NotificationHandler notificationHandler;
+    private FileHandler fileHandler;
 
     public ClientHandler(Socket socket, ChatServer server) {
         this.socket = socket;
@@ -41,18 +45,26 @@ public class ClientHandler implements Runnable {
         this.conversationHandler = new ConversationHandler(this);
         this.messageHandler = new MessageHandler(this);
         this.notificationHandler = new NotificationHandler(this);
+        this.fileHandler = new FileHandler(this);
     }
 
     @Override
     public void run() {
         try {
-            // Initialize streams
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new PrintWriter(socket.getOutputStream(), true);
+            // === TÁCH RIÊNG STREAM CHO TEXT VÀ BINARY ===
+            InputStream socketInputStream = socket.getInputStream();
+            OutputStream socketOutputStream = socket.getOutputStream();
 
-            System.out.println("✓ Client connected from: " + socket.getInetAddress().getHostAddress());
+            // Stream cho text (protocol, tin nhắn văn bản)
+            this.in = new BufferedReader(new InputStreamReader(socketInputStream));
+            this.out = new PrintWriter(socketOutputStream, true);
 
-            // Handle client messages
+            // Lưu lại stream gốc để FileHandler dùng cho file binary
+            this.rawInputStream = socketInputStream;
+            this.rawOutputStream = socketOutputStream;
+
+            System.out.println("Client connected from: " + socket.getInetAddress().getHostAddress());
+
             String message;
             while (isConnected && (message = in.readLine()) != null) {
                 handleMessage(message);
@@ -60,10 +72,9 @@ public class ClientHandler implements Runnable {
 
         } catch (IOException e) {
             if (isConnected) {
-                System.err.println("⚠️ Client handler error: " + e.getMessage());
+                System.err.println("Client handler error: " + e.getMessage());
             }
         } finally {
-            // IMPORTANT: Always call disconnect when connection ends
             disconnect();
         }
     }
@@ -92,6 +103,8 @@ public class ClientHandler implements Runnable {
             messageHandler.handle(messageType, parts);
         } else if (messageType.startsWith("NOTIFICATION_")) {
             notificationHandler.handle(messageType, parts);
+        } else if (messageType.startsWith("FILE_")) {
+            fileHandler.handle(messageType, parts);
         } else {
             // Handle auth and user commands directly
             handleDirectCommands(messageType, parts);
@@ -783,5 +796,14 @@ public class ClientHandler implements Runnable {
 
     public boolean isConnected() {
         return isConnected;
+    }
+
+    // Thêm vào cuối phần GETTERS trong class ClientHandler
+    public InputStream getRawInputStream() {
+        return rawInputStream;
+    }
+
+    public OutputStream getRawOutputStream() {
+        return rawOutputStream;
     }
 }

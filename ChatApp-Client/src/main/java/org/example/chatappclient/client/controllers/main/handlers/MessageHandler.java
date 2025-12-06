@@ -1,5 +1,6 @@
 package org.example.chatappclient.client.controllers.main.handlers;
 
+import javafx.scene.layout.VBox;
 import org.example.chatappclient.client.SocketClient;
 import org.example.chatappclient.client.models.Conversation;
 import org.example.chatappclient.client.protocol.Protocol;
@@ -10,35 +11,30 @@ import javafx.application.Platform;
 import org.example.chatappclient.client.utils.ui.AlertUtil;
 import org.example.chatappclient.client.controllers.main.MainController;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Handler for processing incoming messages from server
+ * Handler xử lý tin nhắn với đồng bộ hiển thị file giữa người gửi và nhận
  */
 public class MessageHandler {
 
     private static volatile MessageHandler instance;
     private final Map<String, Consumer<String>> handlers;
     private MainController mainController;
-
-    // Callbacks
-    private Consumer<Message> onNewMessage;
-    private Consumer<String> onTypingStart;
-    private Consumer<String> onTypingStop;
-    private BiConsumer<String, String> onMessageRead;
-    private BiConsumer<String, Boolean> onUserStatusChange;
-    private Consumer<CallInfo> onIncomingCall;
-    private Consumer<String> onCallEnded;
+    private MessageService messageService;
 
     // Reply state
     private Message replyToMessage;
 
     public MessageHandler() {
         handlers = new HashMap<>();
+        messageService = MessageService.getInstance();
         initializeHandlers();
+        setupMessageServiceCallbacks();
     }
 
     public static MessageHandler getInstance() {
@@ -52,7 +48,6 @@ public class MessageHandler {
         return instance;
     }
 
-    // Inject MainController dependency
     public void setMainController(MainController controller) {
         this.mainController = controller;
     }
@@ -60,41 +55,85 @@ public class MessageHandler {
     // ==================== INITIALIZE HANDLERS ====================
 
     private void initializeHandlers() {
-        // Message handlers
         handlers.put(Protocol.MESSAGE_RECEIVE, this::handleNewMessage);
         handlers.put(Protocol.MESSAGE_READ, this::handleMessageRead);
         handlers.put(Protocol.MESSAGE_DELIVERED, this::handleMessageDelivered);
-
-        // Typing handlers
         handlers.put(Protocol.TYPING_START, this::handleTypingStart);
         handlers.put(Protocol.TYPING_STOP, this::handleTypingStop);
-
-        // User status handlers
         handlers.put(Protocol.USER_UPDATE_STATUS, this::handleUserStatusChange);
         handlers.put(Protocol.USER_GET_ONLINE_STATUS, this::handleOnlineStatus);
-
-        // Call handlers
         handlers.put(Protocol.CALL_INCOMING, this::handleIncomingCall);
         handlers.put(Protocol.CALL_END, this::handleCallEnded);
-
         handlers.put(Protocol.CONVERSATION_GET_ALL, this::handleConversationGetAll);
         handlers.put(Protocol.CONVERSATION_GET, this::handleConversationGet);
         handlers.put(Protocol.CONVERSATION_CREATE, this::handleConversationCreate);
-
-        // Notification handlers
         handlers.put(Protocol.NOTIFICATION_NEW, this::handleNewNotification);
     }
 
+    private void setupMessageServiceCallbacks() {
+        messageService.setOnNewMessage((conversationId, message) -> {
+            Platform.runLater(() -> {
+                if (mainController != null) {
+                    if (conversationId.equals(mainController.getCurrentConversationId())) {
+                        mainController.addMessageToUI(message);
+                    }
+
+                    try {
+                        SoundUtil.playMessageReceived();
+                    } catch (Exception e) {
+                        System.err.println("Cannot play sound: " + e.getMessage());
+                    }
+
+                    if (!conversationId.equals(mainController.getCurrentConversationId())) {
+                        NotificationService.getInstance().showMessageNotification(
+                                message.getSenderName(),
+                                message.getDisplayContent()
+                        );
+                    }
+                }
+            });
+        });
+
+        messageService.setOnTypingStart((conversationId, userId) -> {
+            Platform.runLater(() -> {
+                if (mainController != null &&
+                        conversationId.equals(mainController.getCurrentConversationId())) {
+                    try {
+                        String userName = UserService.getInstance()
+                                .getUser(userId).getUsername();
+                        mainController.showTypingIndicator(userName);
+                    } catch (Exception e) {
+                        mainController.showTypingIndicator("Ai đó");
+                    }
+                }
+            });
+        });
+
+        messageService.setOnTypingStop((conversationId) -> {
+            Platform.runLater(() -> {
+                if (mainController != null &&
+                        conversationId.equals(mainController.getCurrentConversationId())) {
+                    mainController.hideTypingIndicator();
+                }
+            });
+        });
+
+        messageService.setOnMessageRead((messageId, userId) -> {
+            Platform.runLater(() -> {
+                if (mainController != null) {
+                    System.out.println("Message " + messageId + " read by " + userId);
+                }
+            });
+        });
+    }
+
     private void handleConversationGet(String message) {
-        // TODO: implement logic to fetch a single conversation
         System.out.println("Received CONVERSATION_GET: " + message);
     }
 
     private void handleConversationCreate(String message) {
-        // TODO: implement logic to create a new conversation
         System.out.println("Received CONVERSATION_CREATE: " + message);
     }
-
 
     // ==================== PROCESS MESSAGE ====================
 
@@ -113,38 +152,72 @@ public class MessageHandler {
 
     // ==================== MESSAGE HANDLERS ====================
 
+    /**
+     * FIXED: Xử lý tin nhắn nhận được - ĐỒNG BỘ cho cả người gửi và người nhận
+     */
     private void handleNewMessage(String message) {
         try {
+            System.out.println("→ Processing MESSAGE_RECEIVE: " + message);
+
             String[] parts = Protocol.parseMessage(message);
             if (parts.length < 5) return;
 
+            String messageId = parts[1];
+            String senderId = parts[3];
+            String conversationId = parts[2];
+
+            String currentUserId = AuthService.getInstance().getCurrentUser().getUserId();
+            boolean isFromMe = senderId.equals(currentUserId);
+
+            // FIX CUỐI CÙNG: Chỉ bỏ qua nếu tin nhắn là do MÌNH gửi + đang có loading view
+            if (isFromMe && mainController != null) {
+                boolean hasLoadingView = mainController.getChatMessagesContainer().getChildren().stream()
+                        .anyMatch(node -> node instanceof VBox vbox &&
+                                vbox.getId() != null &&
+                                vbox.getId().startsWith("loading-"));
+
+                if (hasLoadingView) {
+                    System.out.println("Ignored own uploading message: " + messageId);
+                    return; // FileHandler sẽ tự xử lý
+                }
+            }
+
+            // TẤT CẢ TIN NHẮN KHÁC (từ người khác hoặc không có loading) → HIỂN THỊ NGAY
             Message msg = new Message();
-            msg.setMessageId(parts[1]);
-            msg.setConversationId(parts[2]);
-            msg.setSenderId(parts[3]);
+            msg.setMessageId(messageId);
+            msg.setConversationId(conversationId);
+            msg.setSenderId(senderId);
             msg.setContent(parts[4]);
 
             if (parts.length > 5) msg.setMessageType(parts[5]);
             if (parts.length > 6) msg.setMediaUrl(parts[6]);
             if (parts.length > 7) msg.setSenderName(parts[7]);
             if (parts.length > 8) msg.setSenderAvatar(parts[8]);
-
-            // Play notification sound
-            SoundUtil.playMessageReceived();
-
-            // Notify UI
-            if (onNewMessage != null) {
-                onNewMessage.accept(msg);
+            if (parts.length > 9) msg.setFileName(parts[9]);
+            if (parts.length > 10) {
+                try { msg.setFileSize(Long.parseLong(parts[10])); } catch (Exception ignored) {}
             }
 
-            // Show system notification
-            NotificationService.getInstance().showMessageNotification(
-                    msg.getSenderName(),
-                    msg.getDisplayContent()
-            );
+            msg.setTimestamp(LocalDateTime.now());
+
+            Platform.runLater(() -> {
+                if (mainController != null && conversationId.equals(mainController.getCurrentConversationId())) {
+                    mainController.addMessageToUI(msg);
+                    mainController.scrollToBottom();
+                }
+
+                if (!isFromMe) {
+                    try { SoundUtil.playMessageReceived(); } catch (Exception ignored) {}
+                    if (mainController == null || !conversationId.equals(mainController.getCurrentConversationId())) {
+                        NotificationService.getInstance().showMessageNotification(
+                                msg.getSenderName(), msg.getDisplayContent());
+                    }
+                }
+            });
 
         } catch (Exception e) {
             System.err.println("Error handling new message: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -156,16 +229,15 @@ public class MessageHandler {
             String messageId = parts[1];
             String userId = parts[2];
 
-            if (onMessageRead != null) {
-                onMessageRead.accept(messageId, userId);
-            }
+            Platform.runLater(() -> {
+                System.out.println("Message " + messageId + " read by " + userId);
+            });
         } catch (Exception e) {
             System.err.println("Error handling message read: " + e.getMessage());
         }
     }
 
     private void handleMessageDelivered(String message) {
-        // Similar to handleMessageRead
         System.out.println("Message delivered: " + message);
     }
 
@@ -179,9 +251,18 @@ public class MessageHandler {
             String conversationId = parts[1];
             String userId = parts[2];
 
-            if (onTypingStart != null) {
-                onTypingStart.accept(conversationId + ":" + userId);
-            }
+            Platform.runLater(() -> {
+                if (mainController != null &&
+                        conversationId.equals(mainController.getCurrentConversationId())) {
+                    try {
+                        String userName = UserService.getInstance()
+                                .getUser(userId).getUsername();
+                        mainController.showTypingIndicator(userName);
+                    } catch (Exception e) {
+                        mainController.showTypingIndicator("Ai đó");
+                    }
+                }
+            });
         } catch (Exception e) {
             System.err.println("Error handling typing start: " + e.getMessage());
         }
@@ -194,9 +275,12 @@ public class MessageHandler {
 
             String conversationId = parts[1];
 
-            if (onTypingStop != null) {
-                onTypingStop.accept(conversationId);
-            }
+            Platform.runLater(() -> {
+                if (mainController != null &&
+                        conversationId.equals(mainController.getCurrentConversationId())) {
+                    mainController.hideTypingIndicator();
+                }
+            });
         } catch (Exception e) {
             System.err.println("Error handling typing stop: " + e.getMessage());
         }
@@ -212,9 +296,9 @@ public class MessageHandler {
             String userId = parts[1];
             boolean isOnline = "online".equals(parts[2]);
 
-            if (onUserStatusChange != null) {
-                onUserStatusChange.accept(userId, isOnline);
-            }
+            Platform.runLater(() -> {
+                System.out.println("User " + userId + " is " + (isOnline ? "online" : "offline"));
+            });
         } catch (Exception e) {
             System.err.println("Error handling user status: " + e.getMessage());
         }
@@ -235,14 +319,17 @@ public class MessageHandler {
             callInfo.callId = parts[1];
             callInfo.callerId = parts[2];
             callInfo.callerName = parts[3];
-            callInfo.callType = parts[4]; // "audio" or "video"
+            callInfo.callType = parts[4];
 
-            // Play ring tone
-            SoundUtil.playCallRing();
-
-            if (onIncomingCall != null) {
-                onIncomingCall.accept(callInfo);
+            try {
+                SoundUtil.playCallRing();
+            } catch (Exception e) {
+                System.err.println("Cannot play ring sound");
             }
+
+            Platform.runLater(() -> {
+                System.out.println("Incoming " + callInfo.callType + " call from " + callInfo.callerName);
+            });
         } catch (Exception e) {
             System.err.println("Error handling incoming call: " + e.getMessage());
         }
@@ -255,24 +342,23 @@ public class MessageHandler {
 
             String callId = parts[1];
 
-            if (onCallEnded != null) {
-                onCallEnded.accept(callId);
-            }
+            Platform.runLater(() -> {
+                System.out.println("Call ended: " + callId);
+            });
         } catch (Exception e) {
             System.err.println("Error handling call ended: " + e.getMessage());
         }
     }
-    
-    //
+
     private void handleConversationGetAll(String message) {
         try {
             String[] parts = Protocol.parseMessage(message);
             if (parts.length < 2) return;
 
             String userId = parts[1];
-            List<Conversation> conversations = ConversationService.getInstance().getAllConversations(userId);
+            List<Conversation> conversations = ConversationService.getInstance()
+                    .getAllConversations(userId);
 
-            // Build response
             StringBuilder sb = new StringBuilder();
             sb.append(Protocol.CONVERSATION_GET_ALL).append(Protocol.DELIMITER).append("SUCCESS");
 
@@ -289,9 +375,6 @@ public class MessageHandler {
         }
     }
 
-
-    // ==================== NOTIFICATION HANDLERS ====================
-
     private void handleNewNotification(String message) {
         try {
             String[] parts = Protocol.parseMessage(message);
@@ -302,48 +385,23 @@ public class MessageHandler {
             String type = parts[3];
 
             NotificationService.getInstance().showSystemNotification(title, content);
-            SoundUtil.playNotification();
+
+            try {
+                SoundUtil.playNotification();
+            } catch (Exception e) {
+                System.err.println("Cannot play notification sound");
+            }
 
         } catch (Exception e) {
             System.err.println("Error handling notification: " + e.getMessage());
         }
     }
 
-    // ==================== SETTERS ====================
-
-    public void setOnNewMessage(Consumer<Message> callback) {
-        this.onNewMessage = callback;
-    }
-
-    public void setOnTypingStart(Consumer<String> callback) {
-        this.onTypingStart = callback;
-    }
-
-    public void setOnTypingStop(Consumer<String> callback) {
-        this.onTypingStop = callback;
-    }
-
-    public void setOnMessageRead(BiConsumer<String, String> callback) {
-        this.onMessageRead = callback;
-    }
-
-    public void setOnUserStatusChange(BiConsumer<String, Boolean> callback) {
-        this.onUserStatusChange = callback;
-    }
-
-    public void setOnIncomingCall(Consumer<CallInfo> callback) {
-        this.onIncomingCall = callback;
-    }
-
-    public void setOnCallEnded(Consumer<String> callback) {
-        this.onCallEnded = callback;
-    }
-
     // ==================== MESSAGES ACTIONS ====================
 
     public void sendTextMessage() {
         if (mainController == null) {
-            System.err.println("MainController not set");
+            System.err.println("❌ MainController not set");
             return;
         }
 
@@ -351,11 +409,41 @@ public class MessageHandler {
         String content = mainController.getMessageInputArea().getText();
 
         if (convId == null || content == null || content.trim().isEmpty()) {
+            System.err.println("❌ Invalid conversation or empty message");
             return;
         }
 
-        MessageService.getInstance().sendTextMessage(convId, content);
-        mainController.getMessageInputArea().clear();
+        try {
+            System.out.println("📤 Sending message: " + content);
+
+            Message sentMessage = messageService.sendMessage(
+                    convId,
+                    AuthService.getInstance().getCurrentUser().getUserId(),
+                    content,
+                    "text",
+                    replyToMessage != null ? replyToMessage.getMessageId() : null
+            );
+
+            System.out.println("✅ Message sent successfully: " + sentMessage.getMessageId());
+
+            mainController.getMessageInputArea().clear();
+
+            if (replyToMessage != null) {
+                cancelReply();
+            }
+
+            Platform.runLater(() -> {
+                mainController.addMessageToUI(sentMessage);
+            });
+
+        } catch (Exception e) {
+            System.err.println("❌ Error sending message: " + e.getMessage());
+            e.printStackTrace();
+
+            Platform.runLater(() -> {
+                AlertUtil.showError("Lỗi", "Không thể gửi tin nhắn: " + e.getMessage());
+            });
+        }
     }
 
     public void sendLike(String conversationId) {
@@ -363,13 +451,38 @@ public class MessageHandler {
             System.err.println("ConversationId is null");
             return;
         }
-        MessageService.getInstance().sendLike(conversationId);
+
+        try {
+            messageService.sendLike(conversationId);
+        } catch (Exception e) {
+            System.err.println("Error sending like: " + e.getMessage());
+        }
     }
 
     public void loadMessages(String conversationId) {
-        List<Message> messages = MessageService.getInstance().getMessages(conversationId);
-        if (onNewMessage != null) {
-            messages.forEach(onNewMessage);
+        if (conversationId == null || mainController == null) {
+            System.err.println("❌ Cannot load messages: conversationId or mainController is null");
+            return;
+        }
+
+        try {
+            System.out.println("📥 Loading messages for conversation: " + conversationId);
+
+            List<Message> messages = messageService.getMessages(conversationId);
+
+            System.out.println("✅ Loaded " + messages.size() + " messages");
+
+            Platform.runLater(() -> {
+                mainController.displayMessages(messages);
+            });
+
+        } catch (Exception e) {
+            System.err.println("❌ Error loading messages: " + e.getMessage());
+            e.printStackTrace();
+
+            Platform.runLater(() -> {
+                AlertUtil.showError("Lỗi", "Không thể tải tin nhắn: " + e.getMessage());
+            });
         }
     }
 
@@ -395,20 +508,7 @@ public class MessageHandler {
         return replyToMessage;
     }
 
-    // ==================== CLEANUP ====================
-
-    public void cleanup() {
-        handlers.clear();
-        onNewMessage = null;
-        onTypingStart = null;
-        onTypingStop = null;
-        onMessageRead = null;
-        onUserStatusChange = null;
-        onIncomingCall = null;
-        onCallEnded = null;
-        replyToMessage = null;
-        mainController = null;
-    }
+    // ==================== MEDIA MESSAGES ====================
 
     public void sendImage(String imageUrl, String fileName) {
         if (mainController == null) return;
@@ -416,7 +516,7 @@ public class MessageHandler {
         if (convId == null) return;
 
         try {
-            MessageService.getInstance().sendMediaMessage(
+            Message sentMessage = messageService.sendMediaMessage(
                     convId,
                     AuthService.getInstance().getCurrentUser().getUserId(),
                     "image",
@@ -424,6 +524,10 @@ public class MessageHandler {
                     fileName,
                     0
             );
+
+            Platform.runLater(() -> {
+                mainController.addMessageToUI(sentMessage);
+            });
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -435,7 +539,7 @@ public class MessageHandler {
         if (convId == null) return;
 
         try {
-            MessageService.getInstance().sendMediaMessage(
+            Message sentMessage = messageService.sendMediaMessage(
                     convId,
                     AuthService.getInstance().getCurrentUser().getUserId(),
                     "file",
@@ -443,50 +547,30 @@ public class MessageHandler {
                     fileName,
                     fileSize
             );
+
+            Platform.runLater(() -> {
+                mainController.addMessageToUI(sentMessage);
+            });
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void sendVideo(String videoUrl, String fileName, long fileSize) {
-        if (mainController == null) return;
-        String convId = mainController.getCurrentConversationId();
-        if (convId == null) return;
+    // ==================== HELPERS ====================
 
-        try {
-            MessageService.getInstance().sendMediaMessage(
-                    convId,
-                    AuthService.getInstance().getCurrentUser().getUserId(),
-                    "video",
-                    videoUrl,
-                    fileName,
-                    fileSize
-            );
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    private String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
     }
 
-    public void sendVoice(String audioUrl, int durationSeconds) {
-        if (mainController == null) return;
-        String convId = mainController.getCurrentConversationId();
-        if (convId == null) return;
+    // ==================== CLEANUP ====================
 
-        try {
-            MessageService.getInstance().sendMediaMessage(
-                    convId,
-                    AuthService.getInstance().getCurrentUser().getUserId(),
-                    "voice",
-                    audioUrl,
-                    "voice_message.mp3",
-                    0
-            );
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    public void cleanup() {
+        handlers.clear();
+        replyToMessage = null;
+        mainController = null;
     }
-
-
 
     // ==================== HELPER CLASSES ====================
 
@@ -495,10 +579,5 @@ public class MessageHandler {
         public String callerId;
         public String callerName;
         public String callType;
-    }
-
-    @FunctionalInterface
-    public interface BiConsumer<T, U> {
-        void accept(T t, U u);
     }
 }

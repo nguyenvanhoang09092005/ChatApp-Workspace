@@ -17,6 +17,9 @@ public class SocketClient {
     private Socket socket;
     private BufferedReader reader;
     private PrintWriter writer;
+
+    private InputStream rawInputStream;
+    private OutputStream rawOutputStream;
     private boolean isConnected;
     private boolean isRunning;
 
@@ -84,11 +87,17 @@ public class SocketClient {
             System.out.println("🔌 Đang kết nối đến " + host + ":" + port + " ...");
             socket = new Socket(host, port);
             //socket.setSoTimeout(config.getReadTimeout());
-            socket.setKeepAlive(true); // Giữ kết nối sống
-            socket.setTcpNoDelay(true); // Tắt Nagle's algorithm để giảm độ trễ
+            socket.setKeepAlive(true);
+            socket.setTcpNoDelay(true);
 
-            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            writer = new PrintWriter(socket.getOutputStream(), true);
+            this.rawInputStream = socket.getInputStream();
+            this.rawOutputStream = socket.getOutputStream();
+
+            this.reader = new BufferedReader(new InputStreamReader(this.rawInputStream));
+            this.writer = new PrintWriter(this.rawOutputStream, true);
+
+//            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+//            writer = new PrintWriter(socket.getOutputStream(), true);
 
             isConnected = true;
             isRunning = true;
@@ -346,7 +355,18 @@ public class SocketClient {
         }
     }
 
+    // ==================== FILE TRANSFER ====================
+    public InputStream getRawInputStream() {
+        return rawInputStream;
+    }
 
+    public OutputStream getRawOutputStream() {
+        return rawOutputStream;
+    }
+
+    public String receiveMessage() throws IOException {
+        return reader.readLine();
+    }
 
     /**
      * Đăng ký handler xử lý cho một command cụ thể

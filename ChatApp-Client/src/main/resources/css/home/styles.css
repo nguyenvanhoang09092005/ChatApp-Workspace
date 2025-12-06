@@ -645,3 +645,461 @@
     -fx-font-size: 14px;
     -fx-text-fill: #050505;
 }
+
+/* ==================== CONVERSATION LIST STYLES ==================== */
+
+.conversation-item {
+    -fx-background-color: transparent;
+    -fx-cursor: hand;
+    -fx-background-radius: 12px;
+    -fx-padding: 14px;
+    -fx-spacing: 12px;
+    -fx-border-color: transparent;
+    -fx-border-width: 0 0 0 4px;
+    -fx-border-radius: 12px;
+}
+
+.conversation-item:hover {
+    -fx-background-color: #F5F7FA;
+}
+
+.conversation-item.active {
+    -fx-background-color: #E7F3FF;
+    -fx-border-color: #0084FF;
+    -fx-border-width: 0 0 0 3px;
+}
+
+.conversation-item.unread {
+    -fx-background-color: #F0F8FF;
+}
+
+.conversation-item.unread:hover {
+    -fx-background-color: #E7F3FF;
+}
+
+/* Avatar & Online Indicator */
+.avatar-container {
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 4, 0, 0, 2);
+}
+
+.online-indicator {
+    -fx-fill: #31A24C;
+    -fx-stroke: white;
+    -fx-stroke-width: 2.5;
+}
+
+/* Conversation Info */
+.conv-name {
+    -fx-font-size: 15px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #050505;
+}
+
+.conversation-item.unread .conv-name {
+    -fx-font-weight: 700;
+    -fx-text-fill: #000000;
+}
+
+.conv-time {
+    -fx-font-size: 12px;
+    -fx-text-fill: #65676B;
+    -fx-font-weight: 500;
+}
+
+.conversation-item.unread .conv-time {
+    -fx-text-fill: #0084FF;
+    -fx-font-weight: 600;
+}
+
+.conv-message {
+    -fx-font-size: 13px;
+    -fx-text-fill: #65676B;
+    -fx-text-overrun: ellipsis;
+}
+
+.conversation-item.unread .conv-message {
+    -fx-font-weight: 600;
+    -fx-text-fill: #050505;
+}
+
+/* Unread Badge */
+.unread-badge {
+    -fx-background-color: #0084FF;
+    -fx-text-fill: white;
+    -fx-font-size: 11px;
+    -fx-font-weight: 700;
+    -fx-padding: 4px 8px;
+    -fx-background-radius: 12px;
+    -fx-min-width: 20px;
+    -fx-alignment: center;
+}
+
+/* ==================== MESSAGE STYLES ==================== */
+
+.message-row {
+    -fx-padding: 2px 16px;
+}
+
+.message-row.sent {
+    -fx-alignment: center-right;
+}
+
+.message-row.received {
+    -fx-alignment: center-left;
+}
+
+/* Message Bubbles - SENT (Right Side) */
+.message-bubble.sent {
+    -fx-background-color: linear-gradient(to bottom right, #0084FF, #0073E6);
+    -fx-text-fill: white;
+    -fx-background-radius: 18px 18px 4px 18px;
+    -fx-padding: 10px 16px;
+    -fx-font-size: 15px;
+    -fx-line-spacing: 2px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 132, 255, 0.3), 8, 0, 0, 2);
+}
+
+.message-bubble.sent.consecutive {
+    -fx-background-radius: 18px 4px 4px 18px;
+}
+
+/* Message Bubbles - RECEIVED (Left Side) */
+.message-bubble.received {
+    -fx-background-color: linear-gradient(to bottom right, #F0F2F5, #E4E6EB);
+    -fx-text-fill: #050505;
+    -fx-background-radius: 18px 18px 18px 4px;
+    -fx-padding: 10px 16px;
+    -fx-font-size: 15px;
+    -fx-line-spacing: 2px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.08), 6, 0, 0, 2);
+}
+
+.message-bubble.received.consecutive {
+    -fx-background-radius: 4px 18px 18px 4px;
+}
+
+/* Message Time & Status */
+.message-time {
+    -fx-font-size: 11px;
+    -fx-text-fill: #8A8D91;
+    -fx-padding: 2px 4px 0 4px;
+}
+
+.message-status {
+    -fx-font-size: 11px;
+    -fx-text-fill: #0084FF;
+    -fx-font-weight: 600;
+}
+
+/* Message Images */
+.message-image {
+    -fx-background-radius: 12px;
+    -fx-padding: 4px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 8, 0, 0, 2);
+}
+
+.message-image.sent {
+    -fx-background-color: #0084FF;
+}
+
+.message-image.received {
+    -fx-background-color: #E4E6EB;
+}
+
+/* Date Separator */
+.date-separator {
+    -fx-alignment: center;
+    -fx-padding: 20px 0;
+}
+
+.date-separator-label {
+    -fx-background-color: linear-gradient(to right, #E4E6EB, #F0F2F5, #E4E6EB);
+    -fx-text-fill: #65676B;
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-padding: 6px 16px;
+    -fx-background-radius: 16px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.06), 4, 0, 0, 1);
+}
+
+/* ==================== CHAT HEADER ==================== */
+
+.chat-header {
+    -fx-background-color: white;
+    -fx-padding: 12px 16px;
+    -fx-border-color: #E4E6EB;
+    -fx-border-width: 0 0 1px 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.05), 4, 0, 0, 2);
+}
+
+.chat-partner-name {
+    -fx-font-size: 16px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #050505;
+}
+
+.chat-partner-status {
+    -fx-font-size: 12px;
+    -fx-text-fill: #65676B;
+}
+
+.chat-partner-status.online {
+    -fx-text-fill: #31A24C;
+    -fx-font-weight: 600;
+}
+
+/* ==================== MESSAGE INPUT ==================== */
+
+.message-input-container {
+    -fx-background-color: white;
+    -fx-padding: 12px 16px;
+    -fx-border-color: #E4E6EB;
+    -fx-border-width: 1px 0 0 0;
+}
+
+.message-input-area {
+    -fx-background-color: #F0F2F5;
+    -fx-background-radius: 20px;
+    -fx-padding: 10px 16px;
+    -fx-font-size: 15px;
+    -fx-text-fill: #050505;
+    -fx-prompt-text-fill: #8A8D91;
+    -fx-border-color: transparent;
+    -fx-focus-color: transparent;
+}
+
+.message-input-area:focused {
+    -fx-background-color: #E4E6EB;
+    -fx-border-color: #0084FF;
+    -fx-border-width: 2px;
+}
+
+/* Input Buttons */
+.input-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #0084FF;
+    -fx-font-size: 20px;
+    -fx-cursor: hand;
+    -fx-padding: 8px;
+    -fx-background-radius: 50%;
+}
+
+.input-button:hover {
+    -fx-background-color: #E7F3FF;
+}
+
+.input-button:pressed {
+    -fx-background-color: #D0E8FF;
+}
+
+.send-button {
+    -fx-background-color: #0084FF;
+    -fx-text-fill: white;
+    -fx-background-radius: 50%;
+    -fx-padding: 10px;
+    -fx-cursor: hand;
+}
+
+.send-button:hover {
+    -fx-background-color: #0073E6;
+    -fx-effect: dropshadow(gaussian, rgba(0, 132, 255, 0.4), 8, 0, 0, 2);
+}
+
+.send-button:pressed {
+    -fx-background-color: #0062CC;
+}
+
+/* ==================== TYPING INDICATOR ==================== */
+
+.typing-indicator {
+    -fx-padding: 8px 16px;
+    -fx-spacing: 8px;
+}
+
+.typing-label {
+    -fx-font-size: 13px;
+    -fx-text-fill: #65676B;
+    -fx-font-style: italic;
+}
+
+/* ==================== REPLY PREVIEW ==================== */
+
+.reply-preview {
+    -fx-background-color: #F0F8FF;
+    -fx-padding: 8px 16px;
+    -fx-border-color: #0084FF;
+    -fx-border-width: 0 0 0 3px;
+    -fx-spacing: 8px;
+}
+
+.reply-to-name {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #0084FF;
+}
+
+.reply-to-content {
+    -fx-font-size: 12px;
+    -fx-text-fill: #65676B;
+    -fx-text-overrun: ellipsis;
+}
+
+/* ==================== SCROLLBAR STYLING ==================== */
+
+.scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane .viewport {
+    -fx-background-color: white;
+}
+
+.scroll-pane .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8px;
+}
+
+.scroll-pane .scroll-bar:vertical .thumb {
+    -fx-background-color: #CED0D4;
+    -fx-background-radius: 4px;
+}
+
+.scroll-pane .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #8A8D91;
+}
+
+/* ==================== EMPTY STATES ==================== */
+
+.empty-state {
+    -fx-alignment: center;
+    -fx-padding: 60px;
+    -fx-spacing: 12px;
+}
+
+.empty-state-icon {
+    -fx-font-size: 48px;
+}
+
+.empty-state-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #050505;
+}
+
+.empty-state-subtitle {
+    -fx-font-size: 14px;
+    -fx-text-fill: #65676B;
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes fadeIn {
+    from { -fx-opacity: 0; }
+    to { -fx-opacity: 1; }
+}
+
+@keyframes slideInRight {
+    from {
+        -fx-translate-x: 20px;
+        -fx-opacity: 0;
+    }
+    to {
+        -fx-translate-x: 0;
+        -fx-opacity: 1;
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        -fx-translate-x: -20px;
+        -fx-opacity: 0;
+    }
+    to {
+        -fx-translate-x: 0;
+        -fx-opacity: 1;
+    }
+}
+
+.message-row.sent {
+    -fx-animation: slideInRight 0.3s ease-out;
+}
+
+.message-row.received {
+    -fx-animation: slideInLeft 0.3s ease-out;
+}
+
+/* ==================== RESPONSIVE ADJUSTMENTS ==================== */
+
+.message-bubble {
+    -fx-max-width: 400px;
+    -fx-min-width: 60px;
+}
+
+.conversation-item {
+    -fx-min-height: 72px;
+}
+
+/* ==================== HOVER EFFECTS ==================== */
+
+.message-bubble:hover {
+    -fx-cursor: hand;
+    -fx-opacity: 0.95;
+}
+
+.conversation-item:pressed {
+    -fx-background-color: #D8E7F7;
+}
+
+/* ==================== GROUP CHAT SPECIFIC ==================== */
+
+.sender-name-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #0084FF;
+    -fx-padding: 0 0 4px 14px;
+}
+
+/* ==================== FILE & MEDIA BUBBLES ==================== */
+
+.file-bubble {
+    -fx-background-radius: 12px;
+    -fx-padding: 12px 16px;
+    -fx-spacing: 12px;
+}
+
+.file-bubble.sent {
+    -fx-background-color: #0084FF;
+}
+
+.file-bubble.received {
+    -fx-background-color: #E4E6EB;
+}
+
+.file-icon {
+    -fx-font-size: 28px;
+}
+
+.file-name {
+    -fx-font-weight: 600;
+    -fx-font-size: 14px;
+}
+
+.file-bubble.sent .file-name {
+    -fx-text-fill: white;
+}
+
+.file-bubble.received .file-name {
+    -fx-text-fill: #050505;
+}
+
+.file-size {
+    -fx-font-size: 12px;
+}
+
+.file-bubble.sent .file-size {
+    -fx-text-fill: rgba(255, 255, 255, 0.8);
+}
+
+.file-bubble.received .file-size {
+    -fx-text-fill: #65676B;
+}

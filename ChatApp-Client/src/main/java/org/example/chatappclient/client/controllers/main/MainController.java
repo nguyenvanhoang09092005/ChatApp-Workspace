@@ -2,6 +2,7 @@ package org.example.chatappclient.client.controllers.main;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
@@ -10,7 +11,9 @@ import org.example.chatappclient.client.controllers.main.handlers.*;
 import org.example.chatappclient.client.models.*;
 import org.example.chatappclient.client.services.*;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * MainController - Chỉ xử lý hiển thị giao diện chính
@@ -38,7 +41,7 @@ public class MainController {
     @FXML private VBox conversationListContainer;
 
     // Chat Panel
-    @FXML private VBox chatPanel;
+    @FXML private BorderPane chatPanel;
     @FXML private HBox chatHeader;
     @FXML private ImageView chatPartnerAvatar;
     @FXML private Circle partnerOnlineIndicator;
@@ -56,6 +59,8 @@ public class MainController {
     // Welcome & Info Sidebar
     @FXML private VBox welcomeScreen, infoSidebar;
     @FXML private Button startChatButton;
+
+    private ChatController chatController;
 
     // ==================== HANDLERS ====================
     private NavigationHandler navigationHandler;
@@ -75,6 +80,7 @@ public class MainController {
     private User currentUser;
     private String currentConversationId;
 
+    private final Set<String> uploadingMessageIds = new HashSet<>();
     // ==================== INITIALIZATION ====================
     @FXML
     public void initialize() {
@@ -120,9 +126,10 @@ public class MainController {
         navigationHandler = new NavigationHandler(this);
         conversationHandler = new ConversationHandler(this, conversationService, uiFactory);
         messageHandler = MessageHandler.getInstance();
-        messageHandler.setMainController(this); // IMPORTANT: Inject MainController
+        messageHandler.setMainController(this);
         callHandler = new CallHandler(this);
         fileHandler = new FileHandler(this);
+        chatController = new ChatController(chatMessagesContainer, chatScrollPane, currentUser.getUserId());
     }
 
     private void setupUI() {
@@ -166,7 +173,7 @@ public class MainController {
         // Search
         searchField.textProperty().addListener((obs, old, val) -> conversationHandler.searchConversations(val));
 
-        // Messaging - FIXED
+        // Messaging
         sendButton.setOnAction(e -> messageHandler.sendTextMessage());
         likeButton.setOnAction(e -> {
             if (currentConversationId != null) {
@@ -184,8 +191,6 @@ public class MainController {
         // File & Media
         imageButton.setOnAction(e -> fileHandler.selectImage());
         attachButton.setOnAction(e -> fileHandler.selectFile());
-        stickerButton.setOnAction(e -> fileHandler.showStickerPicker());
-        voiceButton.setOnAction(e -> fileHandler.recordVoice());
 
         // Calls
         audioCallButton.setOnAction(e -> callHandler.startAudioCall());
@@ -199,7 +204,7 @@ public class MainController {
         conversationHandler.loadConversations();
     }
 
-    // ==================== PUBLIC UI METHODS (được gọi từ Handlers) ====================
+    // ==================== PUBLIC UI METHODS ====================
 
     public void showWelcomeScreen() {
         welcomeScreen.setVisible(true);
@@ -232,45 +237,11 @@ public class MainController {
     }
 
     public void displayMessages(List<Message> messages) {
-        Platform.runLater(() -> {
-            chatMessagesContainer.getChildren().clear();
-
-            if (messages.isEmpty()) {
-                chatMessagesContainer.getChildren().add(
-                        uiFactory.createCenteredLabel("Hãy bắt đầu cuộc trò chuyện!")
-                );
-                return;
-            }
-
-            String lastDate = null;
-            String lastSender = null;
-
-            for (Message msg : messages) {
-                String msgDate = uiFactory.extractDate(msg.getTimestamp());
-
-                // Date separator
-                if (!msgDate.equals(lastDate)) {
-                    chatMessagesContainer.getChildren().add(uiFactory.createDateSeparator(msgDate));
-                    lastDate = msgDate;
-                    lastSender = null;
-                }
-
-                boolean consecutive = msg.getSenderId().equals(lastSender);
-                HBox bubble = uiFactory.createMessageBubble(msg, currentUser.getUserId(), consecutive);
-                chatMessagesContainer.getChildren().add(bubble);
-                lastSender = msg.getSenderId();
-            }
-
-            scrollToBottom();
-        });
+        chatController.displayMessages(messages);
     }
 
     public void addMessageToUI(Message msg) {
-        Platform.runLater(() -> {
-            HBox bubble = uiFactory.createMessageBubble(msg, currentUser.getUserId(), false);
-            chatMessagesContainer.getChildren().add(bubble);
-            scrollToBottom();
-        });
+        chatController.addNewMessage(msg);
     }
 
     public void updateChatHeader(Conversation conv) {
@@ -332,7 +303,7 @@ public class MainController {
 
     // ==================== PRIVATE METHODS ====================
 
-    public  void openConversation(Conversation conv) {
+    public void openConversation(Conversation conv) {
         currentConversationId = conv.getConversationId();
         showChatPanel();
         updateChatHeader(conv);
@@ -358,19 +329,124 @@ public class MainController {
         }
     }
 
+    // ==================== LOADING MESSAGE MANAGEMENT ====================
+
+    /**
+     * Thêm loading indicator vào chat
+     */
+    public void addLoadingMessageToUI(VBox loadingView) {
+        Platform.runLater(() -> {
+            int beforeCount = chatMessagesContainer.getChildren().size();
+            chatMessagesContainer.getChildren().add(loadingView);
+            int afterCount = chatMessagesContainer.getChildren().size();
+
+            System.out.println("➕ ADD LOADING VIEW:");
+            System.out.println("   ID: " + loadingView.getId());
+            System.out.println("   Children before: " + beforeCount);
+            System.out.println("   Children after: " + afterCount);
+            System.out.println("   Added successfully: " + (afterCount > beforeCount));
+
+            scrollToBottom();
+        });
+    }
+
+    /**
+     * Xóa loading indicator khỏi chat
+     */
+    public void removeLoadingMessageFromUI(VBox loadingView) {
+        Platform.runLater(() -> {
+            int beforeCount = chatMessagesContainer.getChildren().size();
+
+            System.out.println("\n➖ REMOVE LOADING VIEW:");
+            System.out.println("   Looking for ID: " + loadingView.getId());
+            System.out.println("   Children count before: " + beforeCount);
+
+            // Kiểm tra xem loading view có trong container không
+            boolean exists = chatMessagesContainer.getChildren().contains(loadingView);
+            System.out.println("   Exists in container: " + exists);
+
+            if (exists) {
+                chatMessagesContainer.getChildren().remove(loadingView);
+                int afterCount = chatMessagesContainer.getChildren().size();
+                System.out.println("   Children count after: " + afterCount);
+                System.out.println("   ✅ Removed successfully");
+            } else {
+                System.err.println("   ⚠️ Loading view NOT FOUND in container!");
+                System.err.println("   Current children in container:");
+
+                for (int i = 0; i < chatMessagesContainer.getChildren().size(); i++) {
+                    Node child = chatMessagesContainer.getChildren().get(i);
+                    System.err.println("     [" + i + "] " + child.getClass().getSimpleName() +
+                            " (ID: " + child.getId() + ")");
+                }
+            }
+        });
+    }
+
+    /**
+     * Getter cho chatMessagesContainer
+     */
+    public VBox getChatMessagesContainer() {
+        return chatMessagesContainer;
+    }
+
     // ==================== GETTERS ====================
 
-    public User getCurrentUser() { return currentUser; }
-    public String getCurrentConversationId() { return currentConversationId; }
-    public TextArea getMessageInputArea() { return messageInputArea; }
-    public VBox getLeftSidebar() { return leftSidebar; }
-    public HBox getReplyPreview() { return replyPreview; }
-    public Label getReplyToName() { return replyToName; }
-    public Label getReplyToContent() { return replyToContent; }
-    public Button getMessagesButton() { return messagesButton; }
-    public Button getContactsButton() { return contactsButton; }
-    public Button getGroupsButton() { return groupsButton; }
-    public Button getNotificationsButton() { return notificationsButton; }
+    public User getCurrentUser() {
+        return currentUser;
+    }
+
+    public String getCurrentConversationId() {
+        return currentConversationId;
+    }
+
+    public TextArea getMessageInputArea() {
+        return messageInputArea;
+    }
+
+    public VBox getLeftSidebar() {
+        return leftSidebar;
+    }
+
+    public HBox getReplyPreview() {
+        return replyPreview;
+    }
+
+    public Label getReplyToName() {
+        return replyToName;
+    }
+
+    public Label getReplyToContent() {
+        return replyToContent;
+    }
+
+    public Button getMessagesButton() {
+        return messagesButton;
+    }
+
+    public Button getContactsButton() {
+        return contactsButton;
+    }
+
+    public Button getGroupsButton() {
+        return groupsButton;
+    }
+
+    public Button getNotificationsButton() {
+        return notificationsButton;
+    }
+
+    public void markUploading(String messageId) {
+        uploadingMessageIds.add(messageId);
+    }
+
+    public boolean isUploading(String messageId) {
+        return uploadingMessageIds.contains(messageId);
+    }
+
+    public void clearUploading(String messageId) {
+        uploadingMessageIds.remove(messageId);
+    }
 
     // ==================== CLEANUP ====================
 

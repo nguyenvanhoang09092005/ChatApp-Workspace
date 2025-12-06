@@ -3,8 +3,8 @@ package org.example.chatappclient.client.controllers.main;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.*;
-import javafx.scene.image.Image;
+import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.shape.Circle;
@@ -41,6 +41,28 @@ public class ChatController {
         this.currentUserId = currentUserId;
         this.uiFactory = new UIComponentFactory();
         this.messageService = MessageService.getInstance();
+
+        // Đảm bảo ScrollPane luôn theo dõi kích thước content
+        setupScrollPane();
+    }
+
+    /**
+     * Cấu hình ScrollPane để tự động cuộn
+     */
+    private void setupScrollPane() {
+        chatMessagesContainer.setAlignment(Pos.TOP_LEFT);
+
+        // Đảm bảo ScrollPane luôn fit content width
+        chatMessagesContainer.prefWidthProperty().bind(chatScrollPane.widthProperty().subtract(2));
+
+        // Lắng nghe thay đổi số lượng children để tự động cuộn
+        chatMessagesContainer.getChildren().addListener((javafx.collections.ListChangeListener<javafx.scene.Node>) c -> {
+            while (c.next()) {
+                if (c.wasAdded()) {
+                    Platform.runLater(() -> scrollToBottom());
+                }
+            }
+        });
     }
 
     /**
@@ -50,10 +72,10 @@ public class ChatController {
         this.currentConversation = conversation;
         this.currentConversationId = conversation.getConversationId();
 
-        // Clear old messages
+        // Xóa các tin nhắn cũ
         chatMessagesContainer.getChildren().clear();
 
-        // Load messages
+        // Load tin nhắn từ server
         loadMessages();
     }
 
@@ -83,21 +105,25 @@ public class ChatController {
                 return;
             }
 
+            // Đảm bảo tin nhắn được sắp xếp theo thời gian tăng dần (cũ → mới)
+            messages.sort((m1, m2) -> m1.getTimestamp().compareTo(m2.getTimestamp()));
+
             String lastDate = null;
             String lastSenderId = null;
 
             for (Message msg : messages) {
-                // Date separator
                 String msgDate = extractDate(msg.getTimestamp());
+
                 if (!msgDate.equals(lastDate)) {
                     chatMessagesContainer.getChildren().add(createDateSeparator(msgDate));
                     lastDate = msgDate;
                     lastSenderId = null;
                 }
 
-                // Message bubble
                 boolean isConsecutive = msg.getSenderId().equals(lastSenderId);
                 HBox messageBubble = createMessageBubble(msg, isConsecutive);
+                messageBubble.setUserData(msg); // Quan trọng: lưu data để kiểm tra
+
                 chatMessagesContainer.getChildren().add(messageBubble);
 
                 lastSenderId = msg.getSenderId();
@@ -107,152 +133,45 @@ public class ChatController {
         });
     }
 
+
     /**
      * Thêm tin nhắn mới vào UI
      */
     public void addNewMessage(Message message) {
         Platform.runLater(() -> {
-            // Check if need date separator
-            if (chatMessagesContainer.getChildren().isEmpty()) {
-                String msgDate = extractDate(message.getTimestamp());
-                chatMessagesContainer.getChildren().add(createDateSeparator(msgDate));
+            String currentDate = extractDate(message.getTimestamp());
+
+            // --- Tìm tin nhắn cuối cùng thực sự ---
+            Message lastRealMessage = null;
+            for (int i = chatMessagesContainer.getChildren().size() - 1; i >= 0; i--) {
+                Object data = chatMessagesContainer.getChildren().get(i).getUserData();
+                if (data instanceof Message) {
+                    lastRealMessage = (Message) data;
+                    break;
+                }
             }
 
+            // --- Nếu tin nhắn mới khác ngày: thêm Date Separator ---
+            if (lastRealMessage == null ||
+                    !extractDate(lastRealMessage.getTimestamp()).equals(currentDate)) {
+                chatMessagesContainer.getChildren().add(createDateSeparator(currentDate));
+            }
+
+            // --- Tạo bubble cho tin nhắn mới ---
             HBox messageBubble = createMessageBubble(message, false);
+            messageBubble.setUserData(message);
             chatMessagesContainer.getChildren().add(messageBubble);
+
             scrollToBottom();
         });
     }
 
+
     /**
-     * Tạo message bubble - PHẢI (người gửi) hoặc TRÁI (người nhận)
+     * Tạo message bubble sử dụng UIComponentFactory
      */
     private HBox createMessageBubble(Message message, boolean isConsecutive) {
-        boolean isSentByMe = message.getSenderId().equals(currentUserId);
-
-        HBox messageRow = new HBox(10);
-        messageRow.setPadding(new Insets(2, 0, 2, 0));
-
-        if (isSentByMe) {
-            // TIN NHẮN BÊN PHẢI - Người gửi
-            messageRow.setAlignment(Pos.CENTER_RIGHT);
-            VBox messageContent = createSentMessageContent(message, isConsecutive);
-
-            Region spacer = new Region();
-            HBox.setHgrow(spacer, Priority.ALWAYS);
-            messageRow.getChildren().addAll(spacer, messageContent);
-
-        } else {
-            // TIN NHẮN BÊN TRÁI - Người nhận
-            messageRow.setAlignment(Pos.CENTER_LEFT);
-
-            // Avatar (chỉ hiển thị nếu không phải tin nhắn liên tiếp)
-            if (!isConsecutive) {
-                ImageView avatar = createAvatar(message.getSenderAvatar(), message.getSenderName(), 36);
-                avatar.setTranslateY(10); // Căn xuống dưới
-                messageRow.getChildren().add(avatar);
-            } else {
-                // Spacer thay avatar
-                Region avatarSpacer = new Region();
-                avatarSpacer.setMinWidth(36);
-                avatarSpacer.setPrefWidth(36);
-                messageRow.getChildren().add(avatarSpacer);
-            }
-
-            VBox messageContent = createReceivedMessageContent(message, isConsecutive);
-            messageRow.getChildren().add(messageContent);
-        }
-
-        return messageRow;
-    }
-
-    /**
-     * Tạo nội dung tin nhắn NGƯỜI GỬI (bên phải, màu xanh)
-     */
-    private VBox createSentMessageContent(Message message, boolean isConsecutive) {
-        VBox content = new VBox(4);
-        content.setAlignment(Pos.CENTER_RIGHT);
-        content.setMaxWidth(400);
-
-        // Message bubble
-        Label bubble = new Label(message.getContent());
-        bubble.setWrapText(true);
-        bubble.setMaxWidth(380);
-        bubble.setPadding(new Insets(10, 14, 10, 14));
-        bubble.setStyle(
-                "-fx-background-color: #0084FF; " +
-                        "-fx-text-fill: white; " +
-                        "-fx-background-radius: 18; " +
-                        "-fx-font-size: 15px; " +
-                        "-fx-line-spacing: 2px;"
-        );
-
-        // Consecutive message - less radius on top right
-        if (isConsecutive) {
-            bubble.setStyle(bubble.getStyle() + "-fx-background-radius: 18 4 18 18;");
-        }
-
-        // Time & Status
-        HBox meta = new HBox(4);
-        meta.setAlignment(Pos.CENTER_RIGHT);
-
-        Label time = new Label(formatTime(message.getTimestamp()));
-        time.setStyle("-fx-font-size: 12px; -fx-text-fill: #65676B;");
-
-        Label status = new Label(message.isRead() ? "✓✓" : "✓");
-        status.setStyle("-fx-font-size: 11px; -fx-text-fill: " +
-                (message.isRead() ? "#0084FF" : "#65676B") + ";");
-
-        meta.getChildren().addAll(time, status);
-
-        content.getChildren().addAll(bubble, meta);
-        return content;
-    }
-
-    /**
-     * Tạo nội dung tin nhắn NGƯỜI NHẬN (bên trái, màu xám)
-     */
-    private VBox createReceivedMessageContent(Message message, boolean isConsecutive) {
-        VBox content = new VBox(4);
-        content.setAlignment(Pos.CENTER_LEFT);
-        content.setMaxWidth(400);
-
-        // Sender name (chỉ hiển thị nếu không phải tin nhắn liên tiếp và là group chat)
-        if (!isConsecutive && isGroupChat()) {
-            Label senderName = new Label(message.getSenderName());
-            senderName.setStyle(
-                    "-fx-font-size: 13px; " +
-                            "-fx-font-weight: 600; " +
-                            "-fx-text-fill: #65676B; " +
-                            "-fx-padding: 0 0 2 14;"
-            );
-            content.getChildren().add(senderName);
-        }
-
-        // Message bubble
-        Label bubble = new Label(message.getContent());
-        bubble.setWrapText(true);
-        bubble.setMaxWidth(380);
-        bubble.setPadding(new Insets(10, 14, 10, 14));
-        bubble.setStyle(
-                "-fx-background-color: #E4E6EB; " +
-                        "-fx-text-fill: #050505; " +
-                        "-fx-background-radius: 18; " +
-                        "-fx-font-size: 15px; " +
-                        "-fx-line-spacing: 2px;"
-        );
-
-        // Consecutive message - less radius on top left
-        if (isConsecutive) {
-            bubble.setStyle(bubble.getStyle() + "-fx-background-radius: 4 18 18 18;");
-        }
-
-        // Time
-        Label time = new Label(formatTime(message.getTimestamp()));
-        time.setStyle("-fx-font-size: 12px; -fx-text-fill: #65676B; -fx-padding: 0 0 0 14;");
-
-        content.getChildren().addAll(bubble, time);
-        return content;
+        return uiFactory.createMessageBubble(message, currentUserId, isConsecutive);
     }
 
     /**
@@ -278,35 +197,7 @@ public class ChatController {
     }
 
     /**
-     * Tạo avatar
-     */
-    private ImageView createAvatar(String url, String name, int size) {
-        ImageView avatar = new ImageView();
-        avatar.setFitWidth(size);
-        avatar.setFitHeight(size);
-        avatar.setPreserveRatio(true);
-
-        Circle clip = new Circle(size / 2.0, size / 2.0, size / 2.0);
-        avatar.setClip(clip);
-
-        try {
-            String imgUrl = (url != null && !url.isEmpty())
-                    ? url
-                    : "https://ui-avatars.com/api/?background=0084ff&color=fff&name=" +
-                    name.replace(" ", "+") + "&size=" + size;
-            avatar.setImage(new Image(imgUrl, true));
-        } catch (Exception e) {
-            avatar.setImage(new Image(
-                    "https://ui-avatars.com/api/?background=0084ff&color=fff&name=U&size=" + size,
-                    true
-            ));
-        }
-
-        return avatar;
-    }
-
-    /**
-     * Hiển thị empty state
+     * Hiển thị empty state khi chưa có tin nhắn
      */
     private void showEmptyState() {
         VBox emptyState = new VBox(12);
@@ -326,6 +217,22 @@ public class ChatController {
         chatMessagesContainer.getChildren().add(emptyState);
     }
 
+    public void addLoadingView(VBox loadingView) {
+        Platform.runLater(() -> {
+            chatMessagesContainer.getChildren().add(loadingView);
+            scrollToBottom();
+        });
+    }
+
+    /**
+     * Xóa loading view khỏi chat
+     */
+    public void removeLoadingView(VBox loadingView) {
+        Platform.runLater(() -> {
+            chatMessagesContainer.getChildren().remove(loadingView);
+        });
+    }
+
     /**
      * Hiển thị lỗi
      */
@@ -335,34 +242,26 @@ public class ChatController {
         chatMessagesContainer.getChildren().add(errorLabel);
     }
 
-    /**
-     * Scroll xuống dưới cùng
-     */
     private void scrollToBottom() {
         Platform.runLater(() -> {
-            chatScrollPane.setVvalue(1.0);
+            chatMessagesContainer.applyCss();
+            chatMessagesContainer.layout();
+            chatScrollPane.applyCss();
+            chatScrollPane.layout();
+
+            chatScrollPane.setVvalue(chatScrollPane.getVmax());
         });
     }
 
-    /**
-     * Format time - HH:mm
-     */
-    private String formatTime(LocalDateTime timestamp) {
-        if (timestamp == null) return "";
-        return timestamp.format(DateTimeFormatter.ofPattern("HH:mm"));
-    }
 
     /**
-     * Extract date for separator
+     * Extract date từ LocalDateTime
      */
     private String extractDate(LocalDateTime timestamp) {
         if (timestamp == null) return "Hôm nay";
 
         LocalDateTime now = LocalDateTime.now();
-        long daysDiff = java.time.temporal.ChronoUnit.DAYS.between(
-                timestamp.toLocalDate(),
-                now.toLocalDate()
-        );
+        long daysDiff = java.time.temporal.ChronoUnit.DAYS.between(timestamp.toLocalDate(), now.toLocalDate());
 
         if (daysDiff == 0) return "Hôm nay";
         if (daysDiff == 1) return "Hôm qua";
@@ -371,14 +270,21 @@ public class ChatController {
     }
 
     /**
-     * Check if current conversation is group chat
+     * Format thời gian HH:mm
      */
-    private boolean isGroupChat() {
-        return currentConversation != null &&
-                "group".equalsIgnoreCase(currentConversation.getType());
+    private String formatTime(LocalDateTime timestamp) {
+        if (timestamp == null) return "";
+        return timestamp.format(DateTimeFormatter.ofPattern("HH:mm"));
     }
 
-    // Getters
+    /**
+     * Kiểm tra cuộc trò chuyện nhóm
+     */
+    private boolean isGroupChat() {
+        return currentConversation != null && "group".equalsIgnoreCase(currentConversation.getType());
+    }
+
+    // Getter
     public String getCurrentConversationId() {
         return currentConversationId;
     }

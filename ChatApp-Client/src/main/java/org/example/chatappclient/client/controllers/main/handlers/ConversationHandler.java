@@ -333,116 +333,44 @@ public class ConversationHandler {
 
     // ==================== REALTIME ====================
 
-//    private void setupRealtimeListener() {
-//        conversationService.setOnNewMessage((conversationId, message) -> {
-//            Conversation conv = conversationsMap.get(conversationId);
-//            if (conv != null) {
-//                conv.setLastMessage(message.getContent());
-//
-//                LocalDateTime time = message.getTimestamp(); // trực tiếp lấy LocalDateTime
-//                conv.setLastMessageTime(time);
-//
-//
-//                if (!conversationId.equals(mainController.getCurrentConversationId())) {
-//                    conv.setUnreadCount(conv.getUnreadCount() + 1);
-//                }
-//
-//                Platform.runLater(() -> {
-//                    filterConversations(currentFilter);
-//                    updateNotificationBadge();
-//                });
-//            }
-//        });
-//
-//
-//        conversationService.setOnUserOnlineStatus((userId, isOnline) -> {
-//            // Update online status for private chats
-//            for (Conversation conv : conversationsMap.values()) {
-//                if (conv.isPrivate()) {
-//                    // Check if this user is the partner
-//                    conv.setActive(isOnline);
-//                }
-//            }
-//            Platform.runLater(() -> filterConversations(currentFilter));
-//        });
-//    }
-
-//    private void setupRealtimeListener() {
-//        // Lắng nghe tin nhắn mới
-//        conversationService.setOnNewMessage((conversationId, message) -> {
-//            Conversation conv = conversationsMap.get(conversationId);
-//            if (conv != null) {
-//                conv.setLastMessage(message.getContent());
-//                LocalDateTime time = message.getTimestamp();
-//                conv.setLastMessageTime(time);
-//
-//                if (!conversationId.equals(mainController.getCurrentConversationId())) {
-//                    conv.setUnreadCount(conv.getUnreadCount() + 1);
-//                }
-//
-//                Platform.runLater(() -> {
-//                    filterConversations(currentFilter);
-//                    updateNotificationBadge();
-//                });
-//            }
-//        });
-//
-//        // Lắng nghe thay đổi trạng thái online
-//        conversationService.setOnUserOnlineStatus((userId, isOnline, lastSeenStr) -> {
-//            // Tìm tất cả conversation có user này
-//            for (Conversation conv : conversationsMap.values()) {
-//                if (conv.isPrivate()) {
-//                    // Kiểm tra xem user này có trong conversation không
-//                    // (cần có method để lấy otherUserId)
-//                    boolean hasThisUser = conv.getMemberIds() != null &&
-//                            conv.getMemberIds().contains(userId);
-//
-//                    if (hasThisUser) {
-//                        conv.setActive(isOnline);
-//
-//                        // Parse và set lastSeenTime
-//                        if (lastSeenStr != null && !lastSeenStr.isEmpty()) {
-//                            try {
-//                                LocalDateTime lastSeen = LocalDateTime.parse(
-//                                        lastSeenStr,
-//                                        DateTimeFormatter.ISO_LOCAL_DATE_TIME
-//                                );
-//                                conv.setLastSeenTime(lastSeen);
-//                            } catch (Exception e) {
-//                                System.err.println("Error parsing last seen: " + e.getMessage());
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//
-//            Platform.runLater(() -> filterConversations(currentFilter));
-//        });
-//    }
-
     private void setupRealtimeListener() {
         System.out.println("→ Thiết lập realtime listeners...");
 
         // Lắng nghe tin nhắn mới
         conversationService.setOnNewMessage((conversationId, message) -> {
-            Conversation conv = conversationsMap.get(conversationId);
-            if (conv != null) {
-                conv.setLastMessage(message.getContent());
-                LocalDateTime time = message.getTimestamp();
-                conv.setLastMessageTime(time);
+            System.out.println("✅ Callback nhận tin nhắn mới: " + message.getContent());
+            System.out.println("   ConversationID: " + conversationId);
+            System.out.println("   Current conversation: " + mainController.getCurrentConversationId());
 
-                if (!conversationId.equals(mainController.getCurrentConversationId())) {
-                    conv.setUnreadCount(conv.getUnreadCount() + 1);
+            Platform.runLater(() -> {
+                // 1. Cập nhật last message trong conversation list
+                Conversation conv = conversationsMap.get(conversationId);
+                if (conv != null) {
+                    conv.setLastMessage(message.getContent());
+                    LocalDateTime time = message.getTimestamp();
+                    conv.setLastMessageTime(time);
+
+                    // Nếu KHÔNG phải conversation đang mở, tăng unread
+                    if (!conversationId.equals(mainController.getCurrentConversationId())) {
+                        conv.setUnreadCount(conv.getUnreadCount() + 1);
+                    }
                 }
 
-                Platform.runLater(() -> {
-                    filterConversations(currentFilter);
-                    updateNotificationBadge();
-                });
-            }
+                // 2. *** QUAN TRỌNG ***: Nếu đang mở conversation này → hiển thị tin nhắn
+                if (conversationId.equals(mainController.getCurrentConversationId())) {
+                    System.out.println("→ Đang mở conversation này, thêm tin nhắn vào UI");
+                    mainController.addMessageToUI(message);
+                } else {
+                    System.out.println("→ Không mở conversation này, chỉ cập nhật danh sách");
+                }
+
+                // 3. Refresh conversation list để hiển thị last message mới
+                filterConversations(currentFilter);
+                updateNotificationBadge();
+            });
         });
 
-        // Lắng nghe thay đổi trạng thái online
+        // Lắng nghe thay đổi trạng thái online (giữ nguyên như cũ)
         conversationService.setOnUserOnlineStatus((userId, isOnline, lastSeenStr) -> {
             System.out.println("→ Nhận thay đổi trạng thái user: " + userId + " - " +
                     (isOnline ? "ONLINE" : "OFFLINE"));
@@ -484,7 +412,6 @@ public class ConversationHandler {
                 System.out.println("  ✅ Đã cập nhật " + updatedCount + " conversations");
                 Platform.runLater(() -> {
                     filterConversations(currentFilter);
-                    System.out.println("  ✅ UI đã được cập nhật");
                 });
             } else {
                 System.out.println("  ⚠️ Không tìm thấy conversation nào để cập nhật");

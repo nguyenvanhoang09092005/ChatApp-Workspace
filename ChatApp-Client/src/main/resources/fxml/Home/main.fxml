@@ -1,136 +1,120 @@
-<?xml version="1.0" encoding="UTF-8"?>
-
-<?import javafx.geometry.Insets?>
-<?import javafx.scene.control.*?>
-<?import javafx.scene.image.ImageView?>
-<?import javafx.scene.layout.*?>
-<?import javafx.scene.shape.Circle?>
-
-<BorderPane xmlns="http://javafx.com/javafx"
-            xmlns:fx="http://javafx.com/fxml"
-            fx:controller="org.example.chatappclient.client.controllers.main.MainController"
-            styleClass="root">
-
-
-    <!-- LEFT SIDEBAR - Navigation -->
+<?xml version="1.0" encoding="UTF-8"?> <?import javafx.geometry.Insets?> <?import javafx.scene.control.*?> <?import javafx.scene.image.ImageView?> <?import javafx.scene.layout.*?> <?import javafx.scene.shape.Circle?>
+<BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="org.example.chatappclient.client.controllers.main.MainController" prefHeight="800.0"
+            prefWidth="1400.0" styleClass="root"> <!-- LEFT SIDEBAR - Navigation -->
     <left>
-        <VBox fx:id="leftSidebar" styleClass="left-sidebar" prefWidth="72.0">
+        <VBox fx:id="leftSidebar" styleClass="left-sidebar"
+              prefWidth="72.0"> <!-- ... (giữ nguyên phần left sidebar) ... -->
             <padding>
                 <Insets top="16" bottom="16"/>
-            </padding>
-
-            <!-- User Avatar -->
+            </padding> <!-- User Avatar -->
             <VBox alignment="CENTER" spacing="8">
                 <StackPane styleClass="avatar-container">
-                    <ImageView fx:id="userAvatar" fitHeight="48.0" fitWidth="48.0"
-                               preserveRatio="true" styleClass="user-avatar">
+                    <ImageView fx:id="userAvatar" fitHeight="48.0" fitWidth="48.0" preserveRatio="true"
+                               styleClass="user-avatar">
                         <clip>
                             <Circle centerX="24" centerY="24" radius="24"/>
                         </clip>
                     </ImageView>
-                    <Circle fx:id="onlineIndicator" radius="6" fill="#31A24C"
-                            stroke="#242526" strokeWidth="2.5"
+                    <Circle fx:id="onlineIndicator" radius="6" fill="#31A24C" stroke="#242526" strokeWidth="2.5"
                             translateX="16" translateY="16"/>
                 </StackPane>
             </VBox>
-
-            <Region VBox.vgrow="ALWAYS" minHeight="20"/>
-
-            <!-- Navigation Icons -->
+            <Region VBox.vgrow="ALWAYS" minHeight="20"/> <!-- Navigation Icons -->
             <VBox spacing="4" alignment="CENTER">
                 <Button fx:id="messagesButton" styleClass="nav-button, active">
                     <graphic>
                         <Label text="💬" styleClass="nav-icon"/>
                     </graphic>
-                    <tooltip><Tooltip text="Tin nhắn"/></tooltip>
+                    <tooltip>
+                        <Tooltip text="Tin nhắn"/>
+                    </tooltip>
                 </Button>
-
                 <Button fx:id="contactsButton" styleClass="nav-button">
                     <graphic>
                         <Label text="👥" styleClass="nav-icon"/>
                     </graphic>
-                    <tooltip><Tooltip text="Danh bạ"/></tooltip>
+                    <tooltip>
+                        <Tooltip text="Danh bạ"/>
+                    </tooltip>
                 </Button>
-
                 <Button fx:id="groupsButton" styleClass="nav-button">
                     <graphic>
                         <Label text="👨‍👩‍👧‍👦" styleClass="nav-icon"/>
                     </graphic>
-                    <tooltip><Tooltip text="Nhóm"/></tooltip>
+                    <tooltip>
+                        <Tooltip text="Nhóm"/>
+                    </tooltip>
                 </Button>
-
                 <Button fx:id="notificationsButton" styleClass="nav-button">
                     <graphic>
                         <StackPane>
                             <Label text="🔔" styleClass="nav-icon"/>
-                            <Label fx:id="notificationBadge" styleClass="notification-badge"
-                                   visible="false" StackPane.alignment="TOP_RIGHT"/>
+                            <Label fx:id="notificationBadge" styleClass="notification-badge" visible="false"
+                                   StackPane.alignment="TOP_RIGHT"/>
                         </StackPane>
                     </graphic>
-                    <tooltip><Tooltip text="Thông báo"/></tooltip>
+                    <tooltip>
+                        <Tooltip text="Thông báo"/>
+                    </tooltip>
                 </Button>
             </VBox>
-
-            <Region VBox.vgrow="ALWAYS"/>
-
-            <!-- Bottom Actions -->
+            <Region VBox.vgrow="ALWAYS"/> <!-- Bottom Actions -->
             <VBox spacing="4" alignment="CENTER">
                 <Separator styleClass="nav-separator"/>
-
                 <Button fx:id="cloudStorageButton" styleClass="nav-button">
                     <graphic>
                         <Label text="☁️" styleClass="nav-icon"/>
                     </graphic>
-                    <tooltip><Tooltip text="Cloud của tôi"/></tooltip>
+                    <tooltip>
+                        <Tooltip text="Cloud của tôi"/>
+                    </tooltip>
                 </Button>
-
                 <Button fx:id="settingsButton" styleClass="nav-button">
                     <graphic>
                         <Label text="⚙️" styleClass="nav-icon"/>
                     </graphic>
-                    <tooltip><Tooltip text="Cài đặt"/></tooltip>
+                    <tooltip>
+                        <Tooltip text="Cài đặt"/>
+                    </tooltip>
                 </Button>
             </VBox>
         </VBox>
-    </left>
-
-    <!-- CENTER -->
+    </left> <!-- CENTER -->
     <center>
-        <HBox>
-            <!-- CONVERSATION LIST PANEL -->
-            <VBox fx:id="conversationPanel" styleClass="conversation-panel" prefWidth="340.0" minWidth="280.0">
-
-                <!-- Header với Search -->
+        <HBox> <!-- CONVERSATION LIST PANEL -->
+            <VBox fx:id="conversationPanel" styleClass="conversation-panel" prefWidth="340.0"
+                  minWidth="280.0"> <!-- ... (giữ nguyên conversation panel) ... --> <!-- Header với Search -->
                 <VBox styleClass="conversation-header" spacing="12">
                     <padding>
                         <Insets top="16" right="16" bottom="12" left="16"/>
-                    </padding>
-
-                    <!-- Title và Actions -->
+                    </padding> <!-- Title và Actions -->
                     <HBox alignment="CENTER_LEFT" spacing="12">
                         <Label fx:id="panelTitle" text="Tin nhắn" styleClass="panel-title"/>
                         <Region HBox.hgrow="ALWAYS"/>
-
                         <Button fx:id="newGroupButton" styleClass="header-action-btn">
-                            <graphic><Label text="👥+" styleClass="action-icon"/></graphic>
-                            <tooltip><Tooltip text="Tạo nhóm"/></tooltip>
+                            <graphic>
+                                <Label text="👥+" styleClass="action-icon"/>
+                            </graphic>
+                            <tooltip>
+                                <Tooltip text="Tạo nhóm"/>
+                            </tooltip>
                         </Button>
-
                         <Button fx:id="newChatButton" styleClass="header-action-btn">
-                            <graphic><Label text="✏️" styleClass="action-icon"/></graphic>
-                            <tooltip><Tooltip text="Tin nhắn mới"/></tooltip>
+                            <graphic>
+                                <Label text="✏️" styleClass="action-icon"/>
+                            </graphic>
+                            <tooltip>
+                                <Tooltip text="Tin nhắn mới"/>
+                            </tooltip>
                         </Button>
-                    </HBox>
-
-                    <!-- Search Bar -->
+                    </HBox> <!-- Search Bar -->
                     <HBox styleClass="search-container" alignment="CENTER_LEFT" spacing="8">
                         <Label text="🔍" styleClass="search-icon"/>
-                        <TextField fx:id="searchField" promptText="Tìm kiếm"
-                                   styleClass="search-field" HBox.hgrow="ALWAYS"/>
+                        <TextField fx:id="searchField" promptText="Tìm kiếm" styleClass="search-field"
+                                   HBox.hgrow="ALWAYS"/>
                     </HBox>
-                </VBox>
-
-                <!-- Filter Tabs -->
+                </VBox> <!-- Filter Tabs -->
                 <HBox fx:id="filterTabs" styleClass="filter-tabs" spacing="8" alignment="CENTER_LEFT">
                     <padding>
                         <Insets top="8" right="16" bottom="8" left="16"/>
@@ -138,181 +122,210 @@
                     <Button fx:id="allTab" text="Tất cả" styleClass="filter-tab, active"/>
                     <Button fx:id="unreadTab" text="Chưa đọc" styleClass="filter-tab"/>
                     <Button fx:id="groupTab" text="Nhóm" styleClass="filter-tab"/>
-                </HBox>
-
-                <!-- Conversation List -->
-                <ScrollPane fx:id="conversationScrollPane" fitToWidth="true"
-                            VBox.vgrow="ALWAYS" styleClass="conversation-scroll">
+                </HBox> <!-- Conversation List -->
+                <ScrollPane fx:id="conversationScrollPane" fitToWidth="true" VBox.vgrow="ALWAYS"
+                            styleClass="conversation-scroll">
                     <VBox fx:id="conversationListContainer" styleClass="conversation-list"/>
                 </ScrollPane>
-            </VBox>
-
-            <!-- CHAT AREA -->
-            <VBox fx:id="chatPanel" HBox.hgrow="ALWAYS" visible="false" styleClass="chat-panel">
-
-                <!-- Chat Header -->
-                <HBox fx:id="chatHeader" styleClass="chat-header" alignment="CENTER_LEFT" spacing="12">
-                    <padding>
-                        <Insets top="12" right="20" bottom="12" left="20"/>
-                    </padding>
-
-                    <StackPane styleClass="chat-avatar-container">
-                        <ImageView fx:id="chatPartnerAvatar" fitHeight="44.0" fitWidth="44.0"
-                                   preserveRatio="true">
-                            <clip><Circle centerX="22" centerY="22" radius="22"/></clip>
-                        </ImageView>
-                        <Circle fx:id="partnerOnlineIndicator" radius="5" fill="#31A24C"
-                                stroke="white" strokeWidth="2" translateX="15" translateY="15"/>
-                    </StackPane>
-
-                    <VBox spacing="2" HBox.hgrow="ALWAYS">
-                        <Label fx:id="chatPartnerName" styleClass="chat-partner-name"/>
-                        <Label fx:id="chatPartnerStatus" styleClass="chat-partner-status"/>
+            </VBox> <!-- RIGHT CONTENT AREA - Hiển thị welcome screen hoặc chat panel -->
+            <StackPane HBox.hgrow="ALWAYS"> <!-- WELCOME SCREEN - Hiển thị mặc định -->
+                <VBox fx:id="welcomeScreen" alignment="CENTER" spacing="20" styleClass="welcome-screen">
+                    <VBox alignment="CENTER" spacing="16" styleClass="welcome-content">
+                        <Label styleClass="welcome-logo" text="💬"/>
+                        <Label text="Chào mừng đến với ChatApp" styleClass="welcome-title"/>
+                        <Label text="Khám phá những tiện ích hỗ trợ làm việc và trò chuyện"
+                               styleClass="welcome-subtitle"/>
+                        <Label text="cùng người thân, bạn bè" styleClass="welcome-subtitle"/>
                     </VBox>
-
-                    <!-- Chat Actions -->
-                    <HBox spacing="4" styleClass="chat-actions">
-                        <Button fx:id="searchInChatBtn" styleClass="chat-action-btn">
-                            <graphic><Label text="🔍" styleClass="chat-action-icon"/></graphic>
-                        </Button>
-                        <Button fx:id="audioCallButton" styleClass="chat-action-btn">
-                            <graphic><Label text="📞" styleClass="chat-action-icon"/></graphic>
-                        </Button>
-                        <Button fx:id="videoCallButton" styleClass="chat-action-btn">
-                            <graphic><Label text="📹" styleClass="chat-action-icon"/></graphic>
-                        </Button>
-                        <Button fx:id="chatInfoButton" styleClass="chat-action-btn">
-                            <graphic><Label text="ℹ️" styleClass="chat-action-icon"/></graphic>
-                        </Button>
-                    </HBox>
-                </HBox>
-
-                <!-- Messages Area -->
-                <ScrollPane fx:id="chatScrollPane" fitToWidth="true" VBox.vgrow="ALWAYS"
-                            styleClass="messages-scroll">
-                    <VBox fx:id="chatMessagesContainer" styleClass="messages-container" spacing="4">
-                        <padding>
-                            <Insets top="16" right="20" bottom="16" left="20"/>
-                        </padding>
+                    <VBox alignment="CENTER" spacing="12" styleClass="welcome-features">
+                        <HBox spacing="12" alignment="CENTER">
+                            <VBox styleClass="feature-card" alignment="CENTER" spacing="8">
+                                <Label text="💬" styleClass="feature-icon"/>
+                                <Label text="Nhắn tin" styleClass="feature-title"/>
+                                <Label text="Gửi tin nhắn nhanh chóng" styleClass="feature-desc"/>
+                            </VBox>
+                            <VBox styleClass="feature-card" alignment="CENTER" spacing="8">
+                                <Label text="📞" styleClass="feature-icon"/>
+                                <Label text="Gọi điện" styleClass="feature-title"/>
+                                <Label text="Gọi thoại và video HD" styleClass="feature-desc"/>
+                            </VBox>
+                            <VBox styleClass="feature-card" alignment="CENTER" spacing="8">
+                                <Label text="👥" styleClass="feature-icon"/>
+                                <Label text="Nhóm chat" styleClass="feature-title"/>
+                                <Label text="Tạo nhóm dễ dàng" styleClass="feature-desc"/>
+                            </VBox>
+                        </HBox>
                     </VBox>
-                </ScrollPane>
+                    <Button fx:id="startChatButton" text="Bắt đầu trò chuyện" styleClass="start-chat-btn"/>
+                </VBox> <!-- CHAT AREA - Ẩn mặc định, hiện khi có cuộc trò chuyện -->
+                <!-- CHAT PANEL - Sử dụng BorderPane thay vì VBox -->
+                <BorderPane fx:id="chatPanel" styleClass="chat-panel" visible="false">
+                    <!-- TOP: Chat Header -->
+                    <top>
+                        <HBox fx:id="chatHeader" styleClass="chat-header" alignment="CENTER_LEFT" spacing="12">
+                            <padding>
+                                <Insets top="16" right="20" bottom="16" left="20"/>
+                            </padding>
 
-                <!-- Typing Indicator -->
-                <HBox fx:id="typingIndicator" styleClass="typing-indicator" visible="false"
-                      alignment="CENTER_LEFT" spacing="8">
-                    <padding>
-                        <Insets top="4" right="20" bottom="4" left="20"/>
-                    </padding>
-                    <HBox styleClass="typing-dots" spacing="3">
-                        <Circle radius="4" styleClass="typing-dot"/>
-                        <Circle radius="4" styleClass="typing-dot"/>
-                        <Circle radius="4" styleClass="typing-dot"/>
-                    </HBox>
-                    <Label fx:id="typingLabel" styleClass="typing-text"/>
-                </HBox>
+                            <StackPane styleClass="avatar-container">
+                                <ImageView fx:id="chatPartnerAvatar" fitWidth="44" fitHeight="44" preserveRatio="true">
+                                    <clip>
+                                        <Circle centerX="22" centerY="22" radius="22"/>
+                                    </clip>
+                                </ImageView>
+                                <Circle fx:id="partnerOnlineIndicator" radius="6"
+                                        layoutX="35" layoutY="35"
+                                        fill="#31A24C" stroke="WHITE" strokeWidth="2"/>
+                            </StackPane>
 
-                <!-- Reply Preview -->
-                <HBox fx:id="replyPreview" styleClass="reply-preview" visible="false"
-                      alignment="CENTER_LEFT" spacing="10">
-                    <padding>
-                        <Insets top="10" right="20" bottom="10" left="20"/>
-                    </padding>
-                    <VBox HBox.hgrow="ALWAYS" spacing="2">
-                        <Label fx:id="replyToName" styleClass="reply-to-name"/>
-                        <Label fx:id="replyToContent" styleClass="reply-to-content"/>
-                    </VBox>
-                    <Button fx:id="cancelReplyBtn" styleClass="cancel-reply-btn" text="✕"/>
-                </HBox>
+                            <VBox spacing="2" HBox.hgrow="ALWAYS">
+                                <Label fx:id="chatPartnerName" styleClass="chat-partner-name"
+                                       text="Nguyễn Văn A"/>
+                                <Label fx:id="chatPartnerStatus" styleClass="chat-partner-status"
+                                       text="Đang hoạt động"/>
+                            </VBox>
 
-                <!-- Message Input Area -->
-                <HBox styleClass="input-container" alignment="CENTER" spacing="8">
-                    <padding>
-                        <Insets top="12" right="16" bottom="12" left="16"/>
-                    </padding>
+                            <HBox spacing="8" alignment="CENTER_RIGHT">
+                                <Button fx:id="searchInChatBtn" styleClass="icon-button">
+                                    <graphic>
+                                        <Label text="🔍" styleClass="icon"/>
+                                    </graphic>
+                                </Button>
+                                <Button fx:id="audioCallButton" styleClass="icon-button">
+                                    <graphic>
+                                        <Label text="📞" styleClass="icon"/>
+                                    </graphic>
+                                </Button>
+                                <Button fx:id="videoCallButton" styleClass="icon-button">
+                                    <graphic>
+                                        <Label text="📹" styleClass="icon"/>
+                                    </graphic>
+                                </Button>
+                                <Button fx:id="chatInfoButton" styleClass="icon-button">
+                                    <graphic>
+                                        <Label text="ℹ️" styleClass="icon"/>
+                                    </graphic>
+                                </Button>
+                            </HBox>
+                        </HBox>
+                    </top>
 
-                    <!-- Attachment Actions -->
-                    <HBox spacing="4" styleClass="input-actions">
-                        <Button fx:id="stickerButton" styleClass="input-action-btn">
-                            <graphic><Label text="😊" styleClass="input-action-icon"/></graphic>
-                            <tooltip><Tooltip text="Sticker"/></tooltip>
-                        </Button>
-                        <Button fx:id="imageButton" styleClass="input-action-btn">
-                            <graphic><Label text="🖼️" styleClass="input-action-icon"/></graphic>
-                            <tooltip><Tooltip text="Hình ảnh"/></tooltip>
-                        </Button>
-                        <Button fx:id="attachButton" styleClass="input-action-btn">
-                            <graphic><Label text="📎" styleClass="input-action-icon"/></graphic>
-                            <tooltip><Tooltip text="Đính kèm file"/></tooltip>
-                        </Button>
-                    </HBox>
+                    <!-- CENTER: Messages Area với VBox.vgrow="ALWAYS" -->
+                    <center>
+                        <VBox VBox.vgrow="ALWAYS">
+                            <!-- Messages ScrollPane - chiếm toàn bộ không gian còn lại -->
+                            <ScrollPane fx:id="chatScrollPane"
+                                        styleClass="chat-scroll-pane"
+                                        fitToWidth="true"
+                                        VBox.vgrow="ALWAYS">
+                                <VBox fx:id="chatMessagesContainer"
+                                      styleClass="chat-messages-container"
+                                      spacing="4">
+                                    <padding>
+                                        <Insets top="20" right="20" bottom="20" left="20"/>
+                                    </padding>
+                                </VBox>
+                            </ScrollPane>
 
-                    <!-- Text Input -->
-                    <HBox styleClass="message-input-wrapper" HBox.hgrow="ALWAYS" alignment="CENTER">
-                        <TextArea fx:id="messageInputArea" promptText="Nhập tin nhắn..."
-                                  wrapText="true" prefRowCount="1" styleClass="message-input"/>
-                    </HBox>
-
-                    <!-- Send Actions -->
-                    <HBox spacing="4">
-                        <Button fx:id="voiceButton" styleClass="input-action-btn">
-                            <graphic><Label text="🎤" styleClass="input-action-icon"/></graphic>
-                            <tooltip><Tooltip text="Gửi tin nhắn thoại"/></tooltip>
-                        </Button>
-                        <Button fx:id="likeButton" styleClass="input-action-btn, like-btn">
-                            <graphic><Label text="👍" styleClass="like-icon"/></graphic>
-                        </Button>
-                        <Button fx:id="sendButton" styleClass="send-button" visible="false">
-                            <graphic><Label text="➤" styleClass="send-icon"/></graphic>
-                        </Button>
-                    </HBox>
-                </HBox>
-            </VBox>
-
-            <!-- WELCOME SCREEN -->
-            <VBox fx:id="welcomeScreen" alignment="CENTER" spacing="20"
-                  HBox.hgrow="ALWAYS" styleClass="welcome-screen">
-
-                <VBox alignment="CENTER" spacing="16" styleClass="welcome-content">
-                    <Label styleClass="welcome-logo" text="💬"/>
-                    <Label text="Chào mừng đến với ChatApp" styleClass="welcome-title"/>
-                    <Label text="Khám phá những tiện ích hỗ trợ làm việc và trò chuyện"
-                           styleClass="welcome-subtitle"/>
-                    <Label text="cùng người thân, bạn bè" styleClass="welcome-subtitle"/>
-                </VBox>
-
-                <VBox alignment="CENTER" spacing="12" styleClass="welcome-features">
-                    <HBox spacing="12" alignment="CENTER">
-                        <VBox styleClass="feature-card" alignment="CENTER" spacing="8">
-                            <Label text="💬" styleClass="feature-icon"/>
-                            <Label text="Nhắn tin" styleClass="feature-title"/>
-                            <Label text="Gửi tin nhắn nhanh chóng" styleClass="feature-desc"/>
+                            <!-- Typing Indicator -->
+                            <HBox fx:id="typingIndicator" styleClass="typing-indicator"
+                                  spacing="8" alignment="CENTER_LEFT"
+                                  visible="false" managed="false">
+                                <padding>
+                                    <Insets top="8" right="20" bottom="8" left="20"/>
+                                </padding>
+                                <Label fx:id="typingLabel" text="Đang nhập..."
+                                       styleClass="typing-text"/>
+                            </HBox>
                         </VBox>
-                        <VBox styleClass="feature-card" alignment="CENTER" spacing="8">
-                            <Label text="📞" styleClass="feature-icon"/>
-                            <Label text="Gọi điện" styleClass="feature-title"/>
-                            <Label text="Gọi thoại và video HD" styleClass="feature-desc"/>
-                        </VBox>
-                        <VBox styleClass="feature-card" alignment="CENTER" spacing="8">
-                            <Label text="👥" styleClass="feature-icon"/>
-                            <Label text="Nhóm chat" styleClass="feature-title"/>
-                            <Label text="Tạo nhóm dễ dàng" styleClass="feature-desc"/>
-                        </VBox>
-                    </HBox>
-                </VBox>
+                    </center>
 
-                <Button fx:id="startChatButton" text="Bắt đầu trò chuyện" styleClass="start-chat-btn"/>
-            </VBox>
+                    <!-- BOTTOM: Input Area - CỐ ĐỊNH Ở DƯỚI CÙNG -->
+                    <bottom>
+                        <VBox styleClass="message-input-container">
+                            <!-- Reply Preview -->
+                            <HBox fx:id="replyPreview" styleClass="reply-preview"
+                                  spacing="12" alignment="CENTER_LEFT"
+                                  visible="false" managed="false">
+                                <padding>
+                                    <Insets top="12" right="20" bottom="12" left="20"/>
+                                </padding>
+
+                                <VBox spacing="4" HBox.hgrow="ALWAYS">
+                                    <Label text="Trả lời" styleClass="reply-label"/>
+                                    <Label fx:id="replyToName" styleClass="reply-to-name"/>
+                                    <Label fx:id="replyToContent" styleClass="reply-to-content"/>
+                                </VBox>
+
+                                <Button fx:id="cancelReplyBtn" styleClass="icon-button">
+                                    <graphic>
+                                        <Label text="✕" styleClass="icon"/>
+                                    </graphic>
+                                </Button>
+                            </HBox>
+
+                            <!-- Input Box -->
+                            <HBox styleClass="message-input-box" spacing="8" alignment="CENTER">
+                                <padding>
+                                    <Insets top="12" right="16" bottom="12" left="16"/>
+                                </padding>
+
+                                <!-- Media Actions -->
+                                <HBox spacing="4">
+                                    <Button fx:id="stickerButton" styleClass="input-action-btn">
+                                        <graphic>
+                                            <Label text="😊" styleClass="input-action-icon"/>
+                                        </graphic>
+                                    </Button>
+                                    <Button fx:id="imageButton" styleClass="input-action-btn">
+                                        <graphic>
+                                            <Label text="🖼️" styleClass="input-action-icon"/>
+                                        </graphic>
+                                    </Button>
+                                    <Button fx:id="attachButton" styleClass="input-action-btn">
+                                        <graphic>
+                                            <Label text="📎" styleClass="input-action-icon"/>
+                                        </graphic>
+                                    </Button>
+                                </HBox>
+
+                                <!-- Text Input -->
+                                <TextArea fx:id="messageInputArea"
+                                          promptText="Aa"
+                                          wrapText="true"
+                                          styleClass="message-input"
+                                          HBox.hgrow="ALWAYS">
+                                </TextArea>
+
+                                <!-- Send Actions -->
+                                <HBox spacing="4">
+                                    <Button fx:id="voiceButton" styleClass="input-action-btn">
+                                        <graphic>
+                                            <Label text="🎤" styleClass="input-action-icon"/>
+                                        </graphic>
+                                    </Button>
+                                    <Button fx:id="likeButton" styleClass="input-action-btn, like-btn">
+                                        <graphic>
+                                            <Label text="👍" styleClass="like-icon"/>
+                                        </graphic>
+                                    </Button>
+                                    <Button fx:id="sendButton" styleClass="send-button"
+                                            visible="false" managed="false">
+                                        <graphic>
+                                            <Label text="➤" styleClass="send-icon"/>
+                                        </graphic>
+                                    </Button>
+                                </HBox>
+                            </HBox>
+                        </VBox>
+                    </bottom>
+                </BorderPane>
+            </StackPane>
         </HBox>
-    </center>
-
-    <!-- RIGHT SIDEBAR - Chat Info (Optional) -->
+    </center> <!-- RIGHT SIDEBAR - Chat Info (Optional) -->
     <right>
-        <VBox fx:id="infoSidebar"
-              styleClass="info-sidebar"
-              prefWidth="320"
-              visible="false"
-              managed="false">
-        </VBox>
+        <VBox fx:id="infoSidebar" styleClass="info-sidebar" prefWidth="320" visible="false"
+              managed="false"> <!-- Will be populated when chat info button is clicked --> </VBox>
     </right>
-
 </BorderPane>
+

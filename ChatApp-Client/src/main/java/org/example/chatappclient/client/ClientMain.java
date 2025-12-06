@@ -1,6 +1,5 @@
 package org.example.chatappclient.client;
 
-
 import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
 import org.example.chatappclient.client.config.AppConfig;
@@ -26,28 +25,28 @@ public class ClientMain extends Application {
             // Lấy kích thước màn hình
             Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
 
-            double width = screenBounds.getWidth() * 0.5;
-            double height = screenBounds.getHeight() * 0.55;
-            Scene scene = new Scene(root, width, height);
+            // Kích thước cửa sổ = 2/3 màn hình
+            double width = screenBounds.getWidth() * 0.66;
+            double height = screenBounds.getHeight() * 0.66;
 
+            // Tạo scene
+            Scene scene = new Scene(root, width, height);
 
             // Add CSS
             scene.getStylesheets().add(getClass().getResource("/css/auth/login.css").toExternalForm());
 
-            // Setup stage
             primaryStage.setTitle(Constants.APP_NAME);
             primaryStage.setScene(scene);
 
-            // Minimum size
             primaryStage.setMinWidth(Constants.WINDOW_MIN_WIDTH);
             primaryStage.setMinHeight(Constants.WINDOW_MIN_HEIGHT);
 
-            primaryStage.show();     // Quan trọng: phải show trước
+            primaryStage.show();
 
-            // Căn giữa cửa sổ trên màn hình
-            primaryStage.centerOnScreen();
+            // Căn giữa màn hình
+            primaryStage.setX((screenBounds.getWidth() - primaryStage.getWidth()) / 2);
+            primaryStage.setY((screenBounds.getHeight() - primaryStage.getHeight()) / 2);
 
-            // Handle close
             primaryStage.setOnCloseRequest(event -> handleClose());
 
         } catch (Exception e) {
@@ -58,7 +57,6 @@ public class ClientMain extends Application {
 
     private void handleClose() {
         try {
-            // Disconnect
             SocketClient client = SocketClient.getInstance();
             if (client.isConnected()) {
                 client.disconnect();
@@ -79,4 +77,3 @@ public class ClientMain extends Application {
         launch(args);
     }
 }
-

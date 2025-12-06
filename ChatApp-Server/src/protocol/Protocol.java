@@ -73,7 +73,6 @@ public class Protocol {
 
     public static final String ERR_NOT_FOUND = "ERR_NOT_FOUND";
 
-
     // ==================== CALL COMMANDS ====================
     public static final String CALL_START = "CALL_START";
     public static final String CALL_ANSWER = "CALL_ANSWER";

@@ -295,11 +295,11 @@ public class ConversationService {
             handleUserStatusChange(message);
         });
 
-        // Handler khi có tin nhắn mới
-        socketClient.registerHandler(Protocol.MESSAGE_RECEIVE, message -> {
-            System.out.println("→ ConversationService nhận MESSAGE_RECEIVE");
-            handleNewMessage(message);
-        });
+//        // Handler khi có tin nhắn mới
+//        socketClient.registerHandler(Protocol.MESSAGE_RECEIVE, message -> {
+//            System.out.println("→ ConversationService nhận MESSAGE_RECEIVE");
+//            handleNewMessage(message);
+//        });
 
         System.out.println("✅ Đã đăng ký các handler realtime");
     }
@@ -344,17 +344,69 @@ public class ConversationService {
     /**
      * Xử lý tin nhắn mới từ server
      */
-    private void handleNewMessage(String message) {
+    /**
+     * Xử lý tin nhắn mới từ server
+     * Format: MESSAGE_RECEIVE|||messageId|||conversationId|||senderId|||content|||type|||mediaUrl|||senderName|||senderAvatar
+     */
+    private void handleNewMessage(String data) {
         try {
-            // Parse message và gọi callback
-            // TODO: Implement based on your MESSAGE_NEW format
-            if (onNewMessage != null) {
-                // Message msg = parseMessage(message);
-                // String conversationId = extractConversationId(message);
-                // onNewMessage.accept(conversationId, msg);
+            System.out.println("→ Parsing MESSAGE_RECEIVE data: " + data);
+
+            // Split theo delimiter của Protocol
+            String[] parts = data.split("\\|\\|\\|");
+
+            if (parts.length < 5) {
+                System.err.println("❌ Invalid MESSAGE_RECEIVE format, parts: " + parts.length);
+                return;
             }
+
+            // Parse message - BỎ QUA parts[0] vì nó là command "MESSAGE_RECEIVE"
+            Message message = new Message();
+            message.setMessageId(parts[1]);           // messageId
+            message.setConversationId(parts[2]);      // conversationId
+            message.setSenderId(parts[3]);            // senderId
+            message.setContent(parts[4]);             // content
+
+            // Optional fields
+            if (parts.length > 5 && parts[5] != null && !parts[5].isEmpty()) {
+                message.setMessageType(parts[5]);     // type
+            } else {
+                message.setMessageType("text");
+            }
+
+            if (parts.length > 6 && parts[6] != null && !parts[6].isEmpty()) {
+                message.setMediaUrl(parts[6]);        // mediaUrl
+            }
+
+            if (parts.length > 7 && parts[7] != null && !parts[7].isEmpty()) {
+                message.setSenderName(parts[7]);      // senderName
+            }
+
+            if (parts.length > 8 && parts[8] != null && !parts[8].isEmpty()) {
+                message.setSenderAvatar(parts[8]);    // senderAvatar
+            }
+
+            // Set timestamp to now
+            message.setTimestamp(LocalDateTime.now());
+
+            System.out.println("✅ Parsed message:");
+            System.out.println("   ID: " + message.getMessageId());
+            System.out.println("   ConversationID: " + message.getConversationId());
+            System.out.println("   Content: " + message.getContent());
+            System.out.println("   Sender: " + message.getSenderName());
+
+            // Gọi callback để thông báo cho UI
+            if (onNewMessage != null) {
+                System.out.println("→ Calling onNewMessage callback");
+                onNewMessage.accept(message.getConversationId(), message);
+                System.out.println("  ✅ Handler executed");
+            } else {
+                System.err.println("⚠️ onNewMessage callback is NULL!");
+            }
+
         } catch (Exception e) {
-            System.err.println("⚠️ Error handling new message: " + e.getMessage());
+            System.err.println("❌ Error handling new message: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
