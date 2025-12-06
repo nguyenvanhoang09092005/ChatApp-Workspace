@@ -73,6 +73,13 @@ public class Protocol {
 
     public static final String ERR_NOT_FOUND = "ERR_NOT_FOUND";
 
+    // ==================== STICKER/EMOJI COMMANDS ====================
+    public static final String STICKER_GET_PACKS = "STICKER_GET_PACKS";
+    public static final String STICKER_GET_PACK = "STICKER_GET_PACK";
+    public static final String STICKER_PURCHASE = "STICKER_PURCHASE";
+    public static final String STICKER_GET_USER_PACKS = "STICKER_GET_USER_PACKS";
+    public static final String EMOJI_GET_CATEGORIES = "EMOJI_GET_CATEGORIES";
+
     // ==================== CALL COMMANDS ====================
     public static final String CALL_START = "CALL_START";
     public static final String CALL_ANSWER = "CALL_ANSWER";

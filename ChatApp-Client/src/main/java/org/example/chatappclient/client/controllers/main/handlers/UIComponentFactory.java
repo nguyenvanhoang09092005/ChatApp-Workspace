@@ -17,7 +17,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.function.Consumer;
 
 /**
- * Factory class để tạo các UI components
+ * Factory class để tạo các UI components - Complete with Sticker/Emoji support
  */
 public class UIComponentFactory {
 
@@ -47,6 +47,7 @@ public class UIComponentFactory {
     }
 
     // ==================== CONVERSATION ITEM ====================
+
     /**
      * Format trạng thái hoạt động của user
      */
@@ -64,12 +65,10 @@ public class UIComponentFactory {
         long hoursAgo = ChronoUnit.HOURS.between(lastSeen, now);
         long daysAgo = ChronoUnit.DAYS.between(lastSeen, now);
 
-        // Nếu quá 1 ngày (24 giờ) thì hiển thị "Không hoạt động"
         if (daysAgo >= 1) {
             return "Không hoạt động";
         }
 
-        // Trong vòng 1 giờ - hiển thị phút
         if (hoursAgo < 1) {
             if (minutesAgo < 1) {
                 return "Hoạt động vừa xong";
@@ -77,7 +76,6 @@ public class UIComponentFactory {
             return "Hoạt động " + minutesAgo + " phút trước";
         }
 
-        // Trong vòng 24 giờ - hiển thị giờ
         return "Hoạt động " + hoursAgo + " giờ trước";
     }
 
@@ -91,7 +89,7 @@ public class UIComponentFactory {
         StackPane avatarPane = new StackPane();
         ImageView avatar = createAvatar(conv.getAvatarUrl(), conv.getName(), 52);
         avatarPane.getChildren().add(avatar);
-// Chỉ hiển thị online indicator nếu thực sự online
+
         if (conv.isActive()) {
             Circle online = new Circle(7);
             online.setFill(Color.web("#31A24C"));
@@ -117,7 +115,6 @@ public class UIComponentFactory {
 
         LocalDateTime lastMsgTime = conv.getLastMessageTime();
         Label time = new Label(formatConvTime(lastMsgTime));
-
         time.getStyleClass().add("conv-time");
 
         header.getChildren().addAll(name, spacer, time);
@@ -167,30 +164,34 @@ public class UIComponentFactory {
         content.setAlignment(isSent ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
 
         // Build bubble based on type
-        switch (msg.getMessageType() != null ? msg.getMessageType() : "text") {
+        String messageType = msg.getMessageType() != null ? msg.getMessageType().toLowerCase() : "text";
+
+        switch (messageType) {
+            case "sticker" -> buildStickerBubble(content, msg, isSent);
+            case "emoji" -> buildEmojiMessage(content, msg);
             case "image" -> buildImageBubble(content, msg, isSent);
             case "file" -> buildFileBubble(content, msg, isSent);
             case "audio" -> buildAudioBubble(content, msg, isSent);
-            case "emoji", "sticker" -> buildEmojiMessage(content, msg);
             default -> buildTextBubble(content, msg, isSent, consecutive);
         }
 
-        // Time and status
-        HBox meta = new HBox(4);
-        meta.setAlignment(isSent ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        // Time and status (not for emoji/sticker messages)
+        if (!"emoji".equals(messageType) && !"sticker".equals(messageType)) {
+            HBox meta = new HBox(4);
+            meta.setAlignment(isSent ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
 
-        Label time = new Label(formatMsgTime(msg.getTimestamp().toString()));
+            Label time = new Label(formatMsgTime(msg.getTimestamp()));
+            time.getStyleClass().add("message-time");
+            meta.getChildren().add(time);
 
-        time.getStyleClass().add("message-time");
-        meta.getChildren().add(time);
+            if (isSent) {
+                Label status = new Label(msg.isRead() ? "✓✓" : "✓");
+                status.getStyleClass().add("message-status");
+                meta.getChildren().add(status);
+            }
 
-        if (isSent) {
-            Label status = new Label(msg.isRead() ? "✓✓" : "✓");
-            status.getStyleClass().add("message-status");
-            meta.getChildren().add(status);
+            content.getChildren().add(meta);
         }
-
-        content.getChildren().add(meta);
 
         // Layout
         if (isSent) {
@@ -204,8 +205,91 @@ public class UIComponentFactory {
         return row;
     }
 
+    /**
+     * Build sticker message bubble
+     */
+    private void buildStickerBubble(VBox content, Message msg, boolean isSent) {
+        VBox stickerBox = new VBox(4);
+        stickerBox.setAlignment(Pos.CENTER);
+        stickerBox.setPadding(new Insets(4));
+
+        if (msg.getMediaUrl() != null && !msg.getMediaUrl().isEmpty()) {
+            try {
+                ImageView stickerImg = new ImageView();
+                stickerImg.setPreserveRatio(true);
+                stickerImg.setFitWidth(150);
+                stickerImg.setFitHeight(150);
+
+                Image image = new Image(msg.getMediaUrl(), true);
+                stickerImg.setImage(image);
+
+                stickerBox.getChildren().add(stickerImg);
+
+                // Add time and status below sticker
+                HBox meta = new HBox(4);
+                meta.setAlignment(Pos.CENTER);
+                meta.setPadding(new Insets(4, 0, 0, 0));
+
+                Label time = new Label(formatMsgTime(msg.getTimestamp()));
+                time.setStyle("-fx-font-size: 11px; -fx-text-fill: #65676b;");
+                meta.getChildren().add(time);
+
+                if (isSent) {
+                    Label status = new Label(msg.isRead() ? "✓✓" : "✓");
+                    status.setStyle("-fx-font-size: 11px; -fx-text-fill: #0084ff;");
+                    meta.getChildren().add(status);
+                }
+
+                stickerBox.getChildren().add(meta);
+
+            } catch (Exception e) {
+                // Fallback: show sticker name
+                Label fallback = new Label("🎨 " + (msg.getFileName() != null ? msg.getFileName() : "Sticker"));
+                fallback.setStyle("-fx-font-size: 48px;");
+                stickerBox.getChildren().add(fallback);
+            }
+        } else {
+            // No URL: show placeholder
+            Label placeholder = new Label("🎨");
+            placeholder.setStyle("-fx-font-size: 64px;");
+            stickerBox.getChildren().add(placeholder);
+        }
+
+        content.getChildren().add(stickerBox);
+    }
+
+    /**
+     * Build emoji message (large single emoji)
+     */
+    private void buildEmojiMessage(VBox content, Message msg) {
+        VBox emojiBox = new VBox(4);
+        emojiBox.setAlignment(Pos.CENTER);
+
+        Label emoji = new Label(msg.getContent());
+        emoji.setStyle("-fx-font-size: 64px; -fx-padding: 8;");
+
+        emojiBox.getChildren().add(emoji);
+
+        // Time below emoji
+        Label time = new Label(formatMsgTime(msg.getTimestamp()));
+        time.setStyle("-fx-font-size: 11px; -fx-text-fill: #65676b;");
+        emojiBox.getChildren().add(time);
+
+        content.getChildren().add(emojiBox);
+    }
+
     private void buildTextBubble(VBox content, Message msg, boolean isSent, boolean consecutive) {
-        Label bubble = new Label(msg.getContent());
+        // Check if message is just emojis (1-3)
+        String msgContent = msg.getContent();
+        if (isOnlyEmojis(msgContent) && countEmojis(msgContent) <= 3) {
+            Label emojiLabel = new Label(msgContent);
+            emojiLabel.setStyle("-fx-font-size: 48px; -fx-padding: 4;");
+            content.getChildren().add(emojiLabel);
+            return;
+        }
+
+        // Normal text bubble
+        Label bubble = new Label(msgContent);
         bubble.getStyleClass().addAll("message-bubble", isSent ? "sent" : "received");
         if (consecutive) bubble.getStyleClass().add("consecutive");
         bubble.setWrapText(true);
@@ -293,10 +377,33 @@ public class UIComponentFactory {
         content.getChildren().add(audioBox);
     }
 
-    private void buildEmojiMessage(VBox content, Message msg) {
-        Label emoji = new Label(msg.getContent());
-        emoji.setStyle("-fx-font-size: 48px;");
-        content.getChildren().add(emoji);
+    // ==================== EMOJI DETECTION ====================
+
+    /**
+     * Check if string contains only emojis
+     */
+    private boolean isOnlyEmojis(String text) {
+        if (text == null || text.trim().isEmpty()) return false;
+
+        // Remove all emojis and check if anything left
+        String withoutEmojis = text.replaceAll("[\\p{So}\\p{Sk}\\p{Cn}]", "").trim();
+        return withoutEmojis.isEmpty();
+    }
+
+    /**
+     * Count emojis in string
+     */
+    private int countEmojis(String text) {
+        if (text == null) return 0;
+
+        int count = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isHighSurrogate(text.charAt(i))) {
+                count++;
+                i++; // Skip low surrogate
+            }
+        }
+        return count;
     }
 
     // ==================== DATE SEPARATOR ====================
@@ -330,12 +437,6 @@ public class UIComponentFactory {
         return box;
     }
 
-    public Label createCenteredLabel(String text) {
-        Label label = new Label(text);
-        label.setStyle("-fx-text-fill: #65676b; -fx-font-size: 14px;");
-        return label;
-    }
-
     // ==================== INFO SIDEBAR ====================
 
     public VBox createInfoSidebarContent(Conversation conv) {
@@ -349,7 +450,6 @@ public class UIComponentFactory {
         Label name = new Label(conv.getName());
         name.setStyle("-fx-font-size: 20px; -fx-font-weight: 700;");
 
-        // Hiển thị trạng thái với thời gian chính xác
         String statusText = formatUserStatus(conv.isActive(), conv.getLastSeenTime());
         Label status = new Label(statusText);
         status.setStyle("-fx-font-size: 13px; -fx-text-fill: " +
@@ -409,32 +509,6 @@ public class UIComponentFactory {
         if (days == 0) return "Hôm nay";
         if (days == 1) return "Hôm qua";
         return dt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-    }
-
-
-    public String formatMsgTime(String timestamp) {
-        if (timestamp == null) return "";
-        try {
-            LocalDateTime dt = LocalDateTime.parse(timestamp);
-            return dt.format(DateTimeFormatter.ofPattern("HH:mm"));
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    public String extractDate(String timestamp) {
-        if (timestamp == null) return "Hôm nay";
-        try {
-            LocalDateTime dt = LocalDateTime.parse(timestamp);
-            LocalDateTime now = LocalDateTime.now();
-            long days = ChronoUnit.DAYS.between(dt.toLocalDate(), now.toLocalDate());
-
-            if (days == 0) return "Hôm nay";
-            if (days == 1) return "Hôm qua";
-            return dt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-        } catch (Exception e) {
-            return "Hôm nay";
-        }
     }
 
     private String formatFileSize(long bytes) {

@@ -4,11 +4,8 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.*;
 
-/**
- * Message model for ChatApp Server
- * MUST BE COMPATIBLE WITH CLIENT MESSAGE MODEL
- */
 public class Message implements Serializable {
+    public static final String TYPE_EMOJI = "EMOJI";
     private static final long serialVersionUID = 1L;
 
     // Message types

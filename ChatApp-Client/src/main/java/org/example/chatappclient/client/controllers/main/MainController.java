@@ -2,6 +2,7 @@ package org.example.chatappclient.client.controllers.main;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.geometry.Bounds;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
@@ -10,18 +11,17 @@ import javafx.scene.shape.Circle;
 import org.example.chatappclient.client.controllers.main.handlers.*;
 import org.example.chatappclient.client.models.*;
 import org.example.chatappclient.client.services.*;
+import org.example.chatappclient.client.utils.ui.EmojiStickerDialog;
+import org.example.chatappclient.client.utils.data.StickerData;
 
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * MainController - Chỉ xử lý hiển thị giao diện chính
- * Các chức năng được delegate sang các Handler tương ứng
- */
 public class MainController {
 
     // ==================== FXML COMPONENTS ====================
+
     // Left Sidebar
     @FXML private VBox leftSidebar;
     @FXML private ImageView userAvatar;
@@ -52,6 +52,8 @@ public class MainController {
     @FXML private HBox typingIndicator, replyPreview;
     @FXML private Label typingLabel, replyToName, replyToContent;
     @FXML private Button cancelReplyBtn;
+
+    // Message Input
     @FXML private Button stickerButton, imageButton, attachButton;
     @FXML private TextArea messageInputArea;
     @FXML private Button voiceButton, likeButton, sendButton;
@@ -61,6 +63,7 @@ public class MainController {
     @FXML private Button startChatButton;
 
     private ChatController chatController;
+    private EmojiStickerDialog emojiStickerDialog;
 
     // ==================== HANDLERS ====================
     private NavigationHandler navigationHandler;
@@ -79,9 +82,10 @@ public class MainController {
     // ==================== STATE ====================
     private User currentUser;
     private String currentConversationId;
-
     private final Set<String> uploadingMessageIds = new HashSet<>();
+
     // ==================== INITIALIZATION ====================
+
     @FXML
     public void initialize() {
         System.out.println("=== MainController Initialize ===");
@@ -92,25 +96,18 @@ public class MainController {
         // Get current user
         currentUser = authService.getCurrentUser();
         if (currentUser == null) {
-            // Create navigation handler first to navigate to login
             navigationHandler = new NavigationHandler(this);
             navigationHandler.navigateToLogin(leftSidebar);
             return;
         }
 
-        // Initialize handlers
+        // Initialize emoji/sticker dialog
+        initEmojiStickerDialog();
+
         initHandlers();
-
-        // Setup UI
         setupUI();
-
-        // Bind event handlers
         bindEventHandlers();
-
-        // Load initial data
         loadInitialData();
-
-        // Show welcome screen
         showWelcomeScreen();
     }
 
@@ -119,6 +116,25 @@ public class MainController {
         conversationService = ConversationService.getInstance();
         messageService = MessageService.getInstance();
         userService = UserService.getInstance();
+    }
+
+    /**
+     * Khởi tạo Emoji/Sticker Dialog
+     */
+    private void initEmojiStickerDialog() {
+        emojiStickerDialog = new EmojiStickerDialog();
+
+        // Callback khi chọn emoji
+        emojiStickerDialog.setOnEmojiSelected(emoji -> {
+            System.out.println("😀 Emoji selected: " + emoji);
+            insertTextAtCursor(emoji);
+        });
+
+        // Callback khi chọn sticker
+        emojiStickerDialog.setOnStickerSelected(sticker -> {
+            System.out.println("🎨 Sticker selected: " + sticker.getName());
+            sendSticker(sticker);
+        });
     }
 
     private void initHandlers() {
@@ -181,6 +197,7 @@ public class MainController {
             }
         });
         cancelReplyBtn.setOnAction(e -> messageHandler.cancelReply());
+
         messageInputArea.setOnKeyPressed(e -> {
             if (e.getCode() == javafx.scene.input.KeyCode.ENTER && !e.isShiftDown()) {
                 e.consume();
@@ -192,12 +209,89 @@ public class MainController {
         imageButton.setOnAction(e -> fileHandler.selectImage());
         attachButton.setOnAction(e -> fileHandler.selectFile());
 
+        // Emoji/Sticker button
+        stickerButton.setOnAction(e -> showEmojiStickerDialog());
+
         // Calls
         audioCallButton.setOnAction(e -> callHandler.startAudioCall());
         videoCallButton.setOnAction(e -> callHandler.startVideoCall());
 
         // Chat info
         chatInfoButton.setOnAction(e -> toggleInfoSidebar());
+    }
+
+    /**
+     * Hiển thị Emoji/Sticker Dialog
+     */
+    private void showEmojiStickerDialog() {
+        if (currentConversationId == null) {
+            System.out.println("⚠️ Chưa chọn conversation");
+            return;
+        }
+
+        // Lấy vị trí của sticker button
+        Bounds bounds = stickerButton.localToScreen(stickerButton.getBoundsInLocal());
+
+        // Hiển thị dialog phía trên button
+        double x = bounds.getMinX();
+        double y = bounds.getMinY() - 430; // 420 (dialog height) + 10 (spacing)
+
+        emojiStickerDialog.show(stickerButton, x, y);
+    }
+
+    /**
+     * Chèn emoji vào vị trí con trỏ trong TextArea
+     */
+    private void insertTextAtCursor(String emoji) {
+        Platform.runLater(() -> {
+            int caretPosition = messageInputArea.getCaretPosition();
+            String currentText = messageInputArea.getText();
+
+            String newText = currentText.substring(0, caretPosition) +
+                    emoji +
+                    currentText.substring(caretPosition);
+
+            messageInputArea.setText(newText);
+            messageInputArea.positionCaret(caretPosition + emoji.length());
+            messageInputArea.requestFocus();
+        });
+    }
+
+    /**
+     * Gửi sticker
+     */
+    private void sendSticker(StickerData.Sticker sticker) {
+        if (currentConversationId == null) {
+            System.err.println("⚠️ Không thể gửi sticker: chưa chọn conversation");
+            return;
+        }
+
+        System.out.println("📤 Sending sticker: " + sticker.getName());
+
+        // Tạo Message object cho sticker
+        Message stickerMsg = new Message();
+        stickerMsg.setMessageId(generateTempMessageId());
+        stickerMsg.setConversationId(currentConversationId);
+        stickerMsg.setSenderId(currentUser.getUserId());
+        stickerMsg.setMessageType("STICKER");
+        stickerMsg.setMediaUrl(sticker.getUrl());
+        stickerMsg.setFileName(sticker.getName());
+        stickerMsg.setTimestamp(java.time.LocalDateTime.now());
+        stickerMsg.setDelivered(false);
+        stickerMsg.setRead(false);
+
+        // Hiển thị sticker ngay lập tức trong UI
+        addMessageToUI(stickerMsg);
+
+        // Gửi sticker qua MessageHandler
+        messageHandler.sendSticker(currentConversationId, sticker);
+    }
+
+    /**
+     * Generate temporary message ID
+     */
+    private String generateTempMessageId() {
+        return "temp_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 1000);
     }
 
     private void loadInitialData() {
@@ -220,7 +314,6 @@ public class MainController {
     public void displayConversations(List<Conversation> conversations) {
         Platform.runLater(() -> {
             conversationListContainer.getChildren().clear();
-
             if (conversations.isEmpty()) {
                 conversationListContainer.getChildren().add(
                         uiFactory.createEmptyState("Chưa có cuộc trò chuyện", "Bắt đầu chat với bạn bè!")
@@ -285,7 +378,6 @@ public class MainController {
         allTab.getStyleClass().remove("active");
         unreadTab.getStyleClass().remove("active");
         groupTab.getStyleClass().remove("active");
-
         switch (filter) {
             case "all" -> allTab.getStyleClass().add("active");
             case "unread" -> unreadTab.getStyleClass().add("active");
@@ -339,13 +431,11 @@ public class MainController {
             int beforeCount = chatMessagesContainer.getChildren().size();
             chatMessagesContainer.getChildren().add(loadingView);
             int afterCount = chatMessagesContainer.getChildren().size();
-
             System.out.println("➕ ADD LOADING VIEW:");
             System.out.println("   ID: " + loadingView.getId());
             System.out.println("   Children before: " + beforeCount);
             System.out.println("   Children after: " + afterCount);
             System.out.println("   Added successfully: " + (afterCount > beforeCount));
-
             scrollToBottom();
         });
     }
@@ -356,12 +446,10 @@ public class MainController {
     public void removeLoadingMessageFromUI(VBox loadingView) {
         Platform.runLater(() -> {
             int beforeCount = chatMessagesContainer.getChildren().size();
-
             System.out.println("\n➖ REMOVE LOADING VIEW:");
             System.out.println("   Looking for ID: " + loadingView.getId());
             System.out.println("   Children count before: " + beforeCount);
 
-            // Kiểm tra xem loading view có trong container không
             boolean exists = chatMessagesContainer.getChildren().contains(loadingView);
             System.out.println("   Exists in container: " + exists);
 
@@ -373,11 +461,9 @@ public class MainController {
             } else {
                 System.err.println("   ⚠️ Loading view NOT FOUND in container!");
                 System.err.println("   Current children in container:");
-
                 for (int i = 0; i < chatMessagesContainer.getChildren().size(); i++) {
                     Node child = chatMessagesContainer.getChildren().get(i);
-                    System.err.println("     [" + i + "] " + child.getClass().getSimpleName() +
-                            " (ID: " + child.getId() + ")");
+                    System.err.println("   [" + i + "] " + child.getClass().getSimpleName() + " (ID: " + child.getId() + ")");
                 }
             }
         });
@@ -451,6 +537,9 @@ public class MainController {
     // ==================== CLEANUP ====================
 
     public void cleanup() {
+        if (emojiStickerDialog != null) {
+            emojiStickerDialog.hide();
+        }
         if (conversationHandler != null) conversationHandler.cleanup();
         if (messageHandler != null) messageHandler.cleanup();
         if (callHandler != null) callHandler.cleanup();

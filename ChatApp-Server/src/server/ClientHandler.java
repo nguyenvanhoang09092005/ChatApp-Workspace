@@ -35,6 +35,8 @@ public class ClientHandler implements Runnable {
     private NotificationHandler notificationHandler;
     private FileHandler fileHandler;
 
+    private StickerHandler stickerHandler;
+
     public ClientHandler(Socket socket, ChatServer server) {
         this.socket = socket;
         this.server = server;
@@ -46,6 +48,7 @@ public class ClientHandler implements Runnable {
         this.messageHandler = new MessageHandler(this);
         this.notificationHandler = new NotificationHandler(this);
         this.fileHandler = new FileHandler(this);
+        this.stickerHandler = new StickerHandler(this);
     }
 
     @Override
@@ -105,6 +108,8 @@ public class ClientHandler implements Runnable {
             notificationHandler.handle(messageType, parts);
         } else if (messageType.startsWith("FILE_")) {
             fileHandler.handle(messageType, parts);
+        }else if (messageType.startsWith("STICKER_") || messageType.startsWith("EMOJI_")) {
+            stickerHandler.handle(messageType, parts);
         } else {
             // Handle auth and user commands directly
             handleDirectCommands(messageType, parts);

@@ -6,6 +6,7 @@ import org.example.chatappclient.client.models.Conversation;
 import org.example.chatappclient.client.protocol.Protocol;
 import org.example.chatappclient.client.models.Message;
 import org.example.chatappclient.client.services.*;
+import org.example.chatappclient.client.utils.data.StickerData;
 import org.example.chatappclient.client.utils.helpers.SoundUtil;
 import javafx.application.Platform;
 import org.example.chatappclient.client.utils.ui.AlertUtil;
@@ -456,6 +457,47 @@ public class MessageHandler {
             messageService.sendLike(conversationId);
         } catch (Exception e) {
             System.err.println("Error sending like: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Gửi sticker
+     */
+    public void sendSticker(String conversationId, StickerData.Sticker sticker) {
+        if (conversationId == null || sticker == null) {
+            System.err.println("❌ Invalid conversation or sticker");
+            return;
+        }
+
+        try {
+            System.out.println("📤 Sending sticker: " + sticker.getName() + " to conversation: " + conversationId);
+
+            // Gửi sticker qua MessageService
+            Message sentMessage = messageService.sendMediaMessage(
+                    conversationId,
+                    AuthService.getInstance().getCurrentUser().getUserId(),
+                    "sticker",
+                    sticker.getUrl(),
+                    sticker.getName(),
+                    0
+            );
+
+            System.out.println("✅ Sticker sent successfully: " + sentMessage.getMessageId());
+
+            // UI update sẽ được xử lý bởi callback hoặc MainController
+            // Platform.runLater(() -> {
+            //     if (mainController != null) {
+            //         mainController.addMessageToUI(sentMessage);
+            //     }
+            // });
+
+        } catch (Exception e) {
+            System.err.println("❌ Error sending sticker: " + e.getMessage());
+            e.printStackTrace();
+
+            Platform.runLater(() -> {
+                AlertUtil.showError("Lỗi", "Không thể gửi sticker: " + e.getMessage());
+            });
         }
     }
 

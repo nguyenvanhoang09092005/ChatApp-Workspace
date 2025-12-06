@@ -3,6 +3,7 @@ package server.handlers;
 import database.dao.MessageDAO;
 import database.dao.ConversationDAO;
 import database.dao.UserDAO;
+import database.dao.StickerDAO;
 import models.Message;
 import models.Conversation;
 import models.User;
@@ -13,7 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Handler for message operations
+ * Handler for message operations - Complete with Sticker/Emoji support
  */
 public class MessageHandler {
 
@@ -65,6 +66,10 @@ public class MessageHandler {
 
     // ==================== SEND MESSAGE ====================
 
+    /**
+     * Handle MESSAGE_SEND with full support for text, image, file, sticker, emoji
+     * Format: MESSAGE_SEND|||conversationId|||senderId|||content|||type|||replyToId|||mediaUrl|||fileName|||fileSize
+     */
     private void handleSendMessage(String[] parts) {
         if (parts.length < 5) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
@@ -83,7 +88,9 @@ public class MessageHandler {
         String fileName = parts.length > 7 ? parts[7] : null;
         String fileSize = parts.length > 8 ? parts[8] : "0";
 
-        // Get conversation and validate membership
+        System.out.println("→ Processing message - Type: " + messageType + ", Conv: " + conversationId);
+
+        // Validate conversation
         Conversation conversation = ConversationDAO.findById(conversationId);
         if (conversation == null) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
@@ -93,6 +100,7 @@ public class MessageHandler {
             return;
         }
 
+        // Validate membership
         if (!conversation.hasMember(senderId)) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.FORBIDDEN,
@@ -113,43 +121,129 @@ public class MessageHandler {
 
         // Create message
         Message message = new Message(conversationId, senderId, content);
-        message.setMessageType(messageType);
         message.setSenderName(sender.getDisplayName());
         message.setSenderAvatar(sender.getAvatarUrl());
-        message.setMediaUrl(mediaUrl);
-        message.setFileName(fileName);
+        message.setTimestamp(LocalDateTime.now());
 
-        try {
-            message.setFileSize(Long.parseLong(fileSize));
-        } catch (NumberFormatException e) {
-            message.setFileSize(0);
+        // ==================== HANDLE MESSAGE TYPES ====================
+
+        if ("sticker".equalsIgnoreCase(messageType) || "STICKER".equals(messageType)) {
+            // STICKER MESSAGE
+            message.setMessageType(Message.TYPE_STICKER);
+            message.setMediaUrl(mediaUrl);
+            message.setFileName(fileName);
+            message.setFileSize(0); // Stickers have no file size
+
+            // Track sticker usage for analytics
+            if (mediaUrl != null && !mediaUrl.isEmpty()) {
+                String stickerId = extractStickerIdFromUrl(mediaUrl);
+                if (stickerId != null) {
+                    StickerDAO.trackStickerUsage(senderId, stickerId);
+                }
+            }
+
+            System.out.println("  → Sticker message: " + fileName);
+
+        } else if ("emoji".equalsIgnoreCase(messageType) || "EMOJI".equals(messageType)) {
+            // EMOJI MESSAGE (large single emoji)
+            message.setMessageType(Message.TYPE_EMOJI);
+            System.out.println("  → Emoji message: " + content);
+
+        } else if ("image".equalsIgnoreCase(messageType) || "IMAGE".equals(messageType)) {
+            // IMAGE MESSAGE
+            message.setMessageType(Message.TYPE_IMAGE);
+            message.setMediaUrl(mediaUrl);
+            message.setFileName(fileName);
+            try {
+                message.setFileSize(Long.parseLong(fileSize));
+            } catch (NumberFormatException e) {
+                message.setFileSize(0);
+            }
+            System.out.println("  → Image message: " + fileName);
+
+        } else if ("file".equalsIgnoreCase(messageType) || "FILE".equals(messageType)) {
+            // FILE MESSAGE
+            message.setMessageType(Message.TYPE_FILE);
+            message.setMediaUrl(mediaUrl);
+            message.setFileName(fileName);
+            try {
+                message.setFileSize(Long.parseLong(fileSize));
+            } catch (NumberFormatException e) {
+                message.setFileSize(0);
+            }
+            System.out.println("  → File message: " + fileName);
+
+        } else if ("like".equalsIgnoreCase(messageType)) {
+            // LIKE MESSAGE
+            message.setMessageType(Message.TYPE_TEXT);
+            message.setContent("👍");
+            System.out.println("  → Like message");
+
+        } else {
+            // TEXT MESSAGE (default)
+            message.setMessageType(Message.TYPE_TEXT);
+            System.out.println("  → Text message");
         }
 
+        // Set reply if exists
         if (replyToId != null && !replyToId.isEmpty()) {
             message.setReplyToMessageId(replyToId);
         }
 
         // Save to database
         if (MessageDAO.createMessage(message)) {
+            System.out.println("  ✅ Message saved to DB: " + message.getMessageId());
 
-            // Build message data
+            // Build message data for response
             String messageData = buildMessageData(message);
 
-            // Send to sender (confirmation)
+            // Send success confirmation to sender
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
                     "Message sent",
                     messageData
             ));
 
-            // Broadcast to all members except sender
+            // Broadcast to all conversation members (except sender)
             broadcastMessage(conversation, message, senderId);
 
-            System.out.println("✓ Message sent: " + conversationId + " from " + senderId);
+            System.out.println("  ✅ Message broadcasted to " + conversation.getMemberIds().size() + " members");
         } else {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_DATABASE_ERROR,
                     "Failed to send message"
             ));
+        }
+    }
+
+    /**
+     * Extract sticker ID from URL
+     * Examples:
+     * - https://example.com/stickers/pack_001/s001.png?sticker_id=s001
+     * - https://example.com/stickers/s001.png
+     */
+    private String extractStickerIdFromUrl(String url) {
+        try {
+            // Method 1: Extract from query parameter
+            if (url.contains("sticker_id=")) {
+                String[] parts = url.split("sticker_id=");
+                if (parts.length > 1) {
+                    return parts[1].split("&")[0];
+                }
+            }
+
+            // Method 2: Extract from filename
+            String filename = url.substring(url.lastIndexOf('/') + 1);
+            String filenameWithoutExt = filename.split("\\.")[0];
+
+            // Validate format (should start with 's' followed by numbers)
+            if (filenameWithoutExt.matches("s\\d+")) {
+                return filenameWithoutExt;
+            }
+
+            return null;
+        } catch (Exception e) {
+            System.err.println("⚠️ Error extracting sticker ID: " + e.getMessage());
+            return null;
         }
     }
 
@@ -196,11 +290,13 @@ public class MessageHandler {
         String conversationId = parts[1];
         String userId = parts[2];
 
+        // Get unread messages before marking
+        List<Message> unreadMessages = MessageDAO.getUnreadMessages(conversationId, userId);
+
         // Mark all messages as read
         MessageDAO.markAllAsRead(conversationId, userId);
 
-        // Notify sender(s) about read status
-        List<Message> unreadMessages = MessageDAO.getUnreadMessages(conversationId, userId);
+        // Notify senders about read status
         for (Message msg : unreadMessages) {
             ClientHandler senderHandler = clientHandler.getServer()
                     .getClientHandler(msg.getSenderId());
@@ -247,6 +343,16 @@ public class MessageHandler {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.FORBIDDEN,
                     "You can only edit your own messages"
+            ));
+            return;
+        }
+
+        // Cannot edit sticker or emoji messages
+        if (Message.TYPE_STICKER.equals(message.getMessageType()) ||
+                Message.TYPE_EMOJI.equals(message.getMessageType())) {
+            clientHandler.sendMessage(Protocol.buildErrorResponse(
+                    Protocol.FORBIDDEN,
+                    "Cannot edit sticker or emoji messages"
             ));
             return;
         }
@@ -391,7 +497,7 @@ public class MessageHandler {
             return;
         }
 
-        // Create forwarded message
+        // Create forwarded message (preserving type and media)
         Message forwardedMessage = new Message(
                 targetConversationId,
                 clientHandler.getUserId(),
@@ -406,6 +512,12 @@ public class MessageHandler {
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
                     "Message forwarded"
             ));
+
+            // Broadcast to target conversation
+            Conversation targetConv = ConversationDAO.findById(targetConversationId);
+            if (targetConv != null) {
+                broadcastMessage(targetConv, forwardedMessage, null);
+            }
         } else {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_DATABASE_ERROR,
@@ -429,8 +541,6 @@ public class MessageHandler {
         String userId = parts[2];
         String emoji = parts[3];
 
-        // TODO: Implement reaction storage
-        // For now, just broadcast to conversation members
 
         Message message = MessageDAO.findById(messageId);
         if (message != null) {
@@ -519,11 +629,11 @@ public class MessageHandler {
                 Protocol.LIST_DELIMITER,
                 message.getContent() != null ? message.getContent() : "",
                 Protocol.LIST_DELIMITER,
-                message.getMessageType(),
+                message.getMessageType() != null ? message.getMessageType() : Message.TYPE_TEXT,
                 Protocol.LIST_DELIMITER,
                 message.getMediaUrl() != null ? message.getMediaUrl() : "",
                 Protocol.LIST_DELIMITER,
-                message.getTimestamp().toString(),
+                message.getTimestamp() != null ? message.getTimestamp().toString() : "",
                 Protocol.LIST_DELIMITER,
                 message.isRead(),
                 Protocol.LIST_DELIMITER,
@@ -541,18 +651,23 @@ public class MessageHandler {
                 message.getMessageId(),
                 message.getConversationId(),
                 message.getSenderId(),
-                message.getContent(),
-                message.getMessageType(),
+                message.getContent() != null ? message.getContent() : "",
+                message.getMessageType() != null ? message.getMessageType() : Message.TYPE_TEXT,
                 message.getMediaUrl() != null ? message.getMediaUrl() : "",
-                message.getSenderName(),
-                message.getSenderAvatar() != null ? message.getSenderAvatar() : ""
+                message.getSenderName() != null ? message.getSenderName() : "",
+                message.getSenderAvatar() != null ? message.getSenderAvatar() : "",
+                message.getFileName() != null ? message.getFileName() : "",
+                String.valueOf(message.getFileSize())
         );
 
+        System.out.println("  → Broadcasting: " + broadcastMsg);
+
         for (String memberId : conversation.getMemberIds()) {
-            if (!memberId.equals(excludeUserId)) {
+            if (excludeUserId == null || !memberId.equals(excludeUserId)) {
                 ClientHandler handler = clientHandler.getServer().getClientHandler(memberId);
                 if (handler != null) {
                     handler.sendMessage(broadcastMsg);
+                    System.out.println("    ✓ Sent to: " + memberId);
                 }
             }
         }
