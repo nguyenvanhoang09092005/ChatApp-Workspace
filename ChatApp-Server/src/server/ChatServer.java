@@ -2,6 +2,8 @@ package server;
 
 import config.ServerConfig;
 import utils.ZeroTierMonitor;
+import server.handlers.GroupChatHandler;
+import protocol.Protocol;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -16,13 +18,46 @@ public class ChatServer {
     private ExecutorService clientThreadPool;
     private ConcurrentHashMap<String, ClientHandler> connectedClients;
     private ZeroTierMonitor zeroTierMonitor;
+    private ConcurrentHashMap<String, RequestHandler> requestHandlers;
+    private GroupChatHandler groupChatHandler;
 
     public ChatServer() {
         this.isRunning = false;
         this.connectedClients = new ConcurrentHashMap<>();
-        // Sử dụng thread pool để quản lý nhiều client đồng thời
+        this.requestHandlers = new ConcurrentHashMap<>();
         this.clientThreadPool = Executors.newCachedThreadPool();
         this.zeroTierMonitor = new ZeroTierMonitor();
+        this.groupChatHandler = new GroupChatHandler();
+
+        // Thiết lập các handlers
+        setupHandlers();
+    }
+
+    /**
+     * Thiết lập các request handlers
+     */
+    private void setupHandlers() {
+        System.out.println("🔄 Đang thiết lập request handlers...");
+
+        // Đăng ký GroupChatHandler cho các command group chat
+        requestHandlers.put(Protocol.GROUP_CREATE, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_UPDATE, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_DELETE, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_GET_INFO, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_GET_MEMBERS, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_ADD_MEMBER, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_REMOVE_MEMBER, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_LEAVE, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_CHANGE_ROLE, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_UPDATE_AVATAR, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_SEARCH, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_MESSAGE_SEND, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_MESSAGE_GET_HISTORY, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_MESSAGE_DELETE, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_MESSAGE_EDIT, groupChatHandler);
+        requestHandlers.put(Protocol.GROUP_MESSAGE_MARK_READ, groupChatHandler);
+
+        System.out.println("✅ Đã đăng ký " + requestHandlers.size() + " handlers cho Group Chat");
     }
 
     /**
@@ -46,8 +81,6 @@ public class ChatServer {
                 // Hiển thị ZeroTier IP
                 String ztIP = zeroTierMonitor.getZeroTierIP();
                 if (ztIP != null) {
-
-
                     System.out.println("✅ Server ZeroTier IP: " + ztIP);
                 } else {
                     System.out.println("⚠️ Không tìm thấy ZeroTier IP.");
@@ -73,6 +106,7 @@ public class ChatServer {
                     System.out.println("║  🔗 ZeroTier IP: " + ztIP + "         ║");
                 }
             }
+            System.out.println("║  🚀 Group Chat: ĐÃ KÍCH HOẠT                  ║");
             System.out.println("╚═══════════════════════════════════════════════╝\n");
 
             // Lắng nghe và chấp nhận kết nối từ client
@@ -179,6 +213,32 @@ public class ChatServer {
     }
 
     /**
+     * Lấy request handler cho command cụ thể
+     */
+    public RequestHandler getRequestHandler(String command) {
+        return requestHandlers.get(command);
+    }
+
+    /**
+     * Xử lý request từ client
+     */
+    public String processRequest(String request, ClientHandler client) {
+        String command = Protocol.getCommand(request);
+        RequestHandler handler = getRequestHandler(command);
+
+        if (handler != null) {
+            return handler.handleRequest(request, client);
+        } else {
+            // Nếu không tìm thấy handler, có thể là command khác (auth, message, etc.)
+            // Các handlers khác sẽ được xử lý trong ClientHandler
+            return Protocol.buildErrorResponse(
+                    Protocol.INVALID_REQUEST,
+                    "No handler for command: " + command
+            );
+        }
+    }
+
+    /**
      * Gửi tin nhắn đến một client cụ thể
      */
     public boolean sendToClient(String userId, String message) {
@@ -198,6 +258,22 @@ public class ChatServer {
                 sendToClient(userId, message);
             }
         }
+    }
+
+    /**
+     * Broadcast tin nhắn đến các thành viên trong group
+     */
+    public void broadcastToGroupMembers(String groupId, String message) {
+        // Phương thức này cần được GroupChatHandler gọi
+        // Implementation sẽ được thêm sau khi có GroupMemberDAO
+        System.out.println("📢 Broadcasting to group " + groupId + ": " + message);
+
+        // TODO: Lấy danh sách thành viên từ GroupMemberDAO và gửi tin nhắn
+        // Ví dụ:
+        // List<String> memberIds = groupMemberDAO.getMemberIds(groupId);
+        // for (String memberId : memberIds) {
+        //     sendToClient(memberId, message);
+        // }
     }
 
     /**
@@ -258,16 +334,16 @@ public class ChatServer {
         // Tạo thông điệp trạng thái
         // Định dạng: USER_STATUS_CHANGED|||userId|||isOnline|||statusText|||lastSeen
         String statusMessage =
-                protocol.Protocol.USER_STATUS_CHANGED + protocol.Protocol.DELIMITER +
-                        userId + protocol.Protocol.DELIMITER +
-                        isOnline + protocol.Protocol.DELIMITER +
-                        user.getStatusText() + protocol.Protocol.DELIMITER +
+                Protocol.USER_STATUS_CHANGED + Protocol.DELIMITER +
+                        userId + Protocol.DELIMITER +
+                        isOnline + Protocol.DELIMITER +
+                        user.getStatusText() + Protocol.DELIMITER +
                         (user.getLastSeen() != null ? user.getLastSeen().toString() : "");
 
 
         // Gửi tới tất cả client đang kết nối, ngoại trừ chính người dùng đó
         int sentCount = 0;
-        synchronized (connectedClients) {  // ĐÃ SỬA: clients -> connectedClients
+        synchronized (connectedClients) {
             for (Map.Entry<String, ClientHandler> entry : connectedClients.entrySet()) {
                 String clientId = entry.getKey();
                 ClientHandler handler = entry.getValue();

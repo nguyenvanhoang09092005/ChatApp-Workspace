@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * ClientHandler - Xử lý kết nối và yêu cầu từ client
- * Updated with online status management
+ * Updated with online status management and Group Chat support
  */
 public class ClientHandler implements Runnable {
 
@@ -34,8 +34,8 @@ public class ClientHandler implements Runnable {
     private MessageHandler messageHandler;
     private NotificationHandler notificationHandler;
     private FileHandler fileHandler;
-
     private StickerHandler stickerHandler;
+    private GroupChatHandler groupChatHandler;  // THÊM GroupChatHandler
 
     public ClientHandler(Socket socket, ChatServer server) {
         this.socket = socket;
@@ -49,6 +49,7 @@ public class ClientHandler implements Runnable {
         this.notificationHandler = new NotificationHandler(this);
         this.fileHandler = new FileHandler(this);
         this.stickerHandler = new StickerHandler(this);
+        this.groupChatHandler = new GroupChatHandler();  // KHỞI TẠO GroupChatHandler
     }
 
     @Override
@@ -98,7 +99,10 @@ public class ClientHandler implements Runnable {
         System.out.println("→ Processing: " + messageType);
 
         // Route to appropriate handler
-        if (messageType.startsWith("CONTACT_")) {
+        if (messageType.startsWith("GROUP_")) {
+            // XỬ LÝ GROUP CHAT COMMANDS
+            handleGroupChatCommands(messageType, parts);
+        } else if (messageType.startsWith("CONTACT_")) {
             contactHandler.handle(messageType, parts);
         } else if (messageType.startsWith("CONVERSATION_")) {
             conversationHandler.handle(messageType, parts);
@@ -108,11 +112,43 @@ public class ClientHandler implements Runnable {
             notificationHandler.handle(messageType, parts);
         } else if (messageType.startsWith("FILE_")) {
             fileHandler.handle(messageType, parts);
-        }else if (messageType.startsWith("STICKER_") || messageType.startsWith("EMOJI_")) {
+        } else if (messageType.startsWith("STICKER_") || messageType.startsWith("EMOJI_")) {
             stickerHandler.handle(messageType, parts);
         } else {
             // Handle auth and user commands directly
             handleDirectCommands(messageType, parts);
+        }
+    }
+
+    /**
+     * Handle Group Chat commands
+     */
+    private void handleGroupChatCommands(String messageType, String[] parts) {
+        if (userId == null) {
+            sendMessage(Protocol.buildErrorResponse(
+                    Protocol.UNAUTHORIZED,
+                    "You must be logged in to use group chat"
+            ));
+            return;
+        }
+
+        try {
+            // Gọi GroupChatHandler để xử lý request
+            String response = groupChatHandler.handleRequest(
+                    Protocol.buildRequest(messageType, parts.length > 1 ?
+                            java.util.Arrays.copyOfRange(parts, 1, parts.length) : new String[0]),
+                    this
+            );
+
+            if (response != null) {
+                sendMessage(response);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendMessage(Protocol.buildErrorResponse(
+                    Protocol.SERVER_ERROR,
+                    "Error processing group chat request: " + e.getMessage()
+            ));
         }
     }
 
@@ -803,7 +839,6 @@ public class ClientHandler implements Runnable {
         return isConnected;
     }
 
-    // Thêm vào cuối phần GETTERS trong class ClientHandler
     public InputStream getRawInputStream() {
         return rawInputStream;
     }

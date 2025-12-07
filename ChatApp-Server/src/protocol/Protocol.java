@@ -133,6 +133,46 @@ public class Protocol {
     public static final String ARRAY_SEPARATOR = ":::";
     public static final String END_OF_MESSAGE = "\n";
 
+    // ==================== GROUP CHAT COMMANDS ====================
+    public static final String GROUP_CREATE = "GROUP_CREATE";
+    public static final String GROUP_UPDATE = "GROUP_UPDATE";
+    public static final String GROUP_DELETE = "GROUP_DELETE";
+    public static final String GROUP_GET_INFO = "GROUP_GET_INFO";
+    public static final String GROUP_GET_MEMBERS = "GROUP_GET_MEMBERS";
+    public static final String GROUP_ADD_MEMBER = "GROUP_ADD_MEMBER";
+    public static final String GROUP_REMOVE_MEMBER = "GROUP_REMOVE_MEMBER";
+    public static final String GROUP_LEAVE = "GROUP_LEAVE";
+    public static final String GROUP_CHANGE_ROLE = "GROUP_CHANGE_ROLE";
+    public static final String GROUP_UPDATE_AVATAR = "GROUP_UPDATE_AVATAR";
+    public static final String GROUP_SEARCH = "GROUP_SEARCH";
+
+    // Group message commands
+    public static final String GROUP_MESSAGE_SEND = "GROUP_MESSAGE_SEND";
+    public static final String GROUP_MESSAGE_RECEIVE = "GROUP_MESSAGE_RECEIVE";
+    public static final String GROUP_MESSAGE_GET_HISTORY = "GROUP_MESSAGE_GET_HISTORY";
+    public static final String GROUP_MESSAGE_DELETE = "GROUP_MESSAGE_DELETE";
+    public static final String GROUP_MESSAGE_EDIT = "GROUP_MESSAGE_EDIT";
+    public static final String GROUP_MESSAGE_MARK_READ = "GROUP_MESSAGE_MARK_READ";
+
+    // Group notifications
+    public static final String GROUP_MEMBER_JOINED = "GROUP_MEMBER_JOINED";
+    public static final String GROUP_MEMBER_LEFT = "GROUP_MEMBER_LEFT";
+    public static final String GROUP_MEMBER_REMOVED = "GROUP_MEMBER_REMOVED";
+    public static final String GROUP_UPDATED = "GROUP_UPDATED";
+    public static final String GROUP_TYPING_START = "GROUP_TYPING_START";
+    public static final String GROUP_TYPING_STOP = "GROUP_TYPING_STOP";
+
+    // ==================== GROUP CHAT ERROR CODES ====================
+    public static final String ERR_GROUP_NOT_FOUND = "ERR_GROUP_NOT_FOUND";
+    public static final String ERR_GROUP_ACCESS_DENIED = "ERR_GROUP_ACCESS_DENIED";
+    public static final String ERR_GROUP_PERMISSION_DENIED = "ERR_GROUP_PERMISSION_DENIED";
+    public static final String ERR_GROUP_MEMBER_EXISTS = "ERR_GROUP_MEMBER_EXISTS";
+    public static final String ERR_GROUP_MEMBER_NOT_FOUND = "ERR_GROUP_MEMBER_NOT_FOUND";
+    public static final String ERR_GROUP_NAME_EXISTS = "ERR_GROUP_NAME_EXISTS";
+    public static final String ERR_GROUP_MAX_MEMBERS = "ERR_GROUP_MAX_MEMBERS";
+    public static final String ERR_GROUP_EMPTY_NAME = "ERR_GROUP_EMPTY_NAME";
+
+
     // ==================== BUILD METHODS ====================
 
     /**
