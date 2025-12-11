@@ -122,6 +122,10 @@ public class ConversationDAO {
         return null;
     }
 
+    public static Conversation getConversationById(String conversationId) {
+        return findById(conversationId);
+    }
+
     /**
      * Find private conversation between two users
      */
@@ -468,4 +472,5 @@ public class ConversationDAO {
 
         return conversation;
     }
+
 }

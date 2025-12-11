@@ -146,6 +146,8 @@ public class MainController {
         callHandler = new CallHandler(this);
         fileHandler = new FileHandler(this);
         chatController = new ChatController(chatMessagesContainer, chatScrollPane, currentUser.getUserId());
+        callHandler.setConversationHandler(conversationHandler);
+
     }
 
     private void setupUI() {

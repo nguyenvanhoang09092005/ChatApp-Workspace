@@ -85,8 +85,19 @@ public class Protocol {
     public static final String CALL_ANSWER = "CALL_ANSWER";
     public static final String CALL_REJECT = "CALL_REJECT";
     public static final String CALL_END = "CALL_END";
-    public static final String CALL_INCOMING = "CALL_INCOMING";
 
+    // Call events
+    public static final String CALL_INCOMING = "CALL_INCOMING";
+    public static final String CALL_ANSWERED = "CALL_ANSWERED";
+    public static final String CALL_REJECTED = "CALL_REJECTED";
+    public static final String CALL_ENDED = "CALL_ENDED";
+    public static final String CALL_ERROR = "CALL_ERROR";
+
+    // Media control
+    public static final String CALL_MUTE = "CALL_MUTE";
+    public static final String CALL_UNMUTE = "CALL_UNMUTE";
+    public static final String CALL_VIDEO_ON = "CALL_VIDEO_ON";
+    public static final String CALL_VIDEO_OFF = "CALL_VIDEO_OFF";
     // ==================== FILE COMMANDS ====================
     public static final String FILE_UPLOAD = "FILE_UPLOAD";
     public static final String FILE_DOWNLOAD = "FILE_DOWNLOAD";
