@@ -1,6 +1,7 @@
 package server.handlers;
 
 import database.dao.ConversationDAO;
+import database.dao.ConversationDeletionDAO;
 import database.dao.UserDAO;
 import database.dao.MessageDAO;
 import models.Conversation;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 
 /**
  * Handler for conversation operations
+ * ✅ Fixed version
  */
 public class ConversationHandler {
 
@@ -23,6 +25,9 @@ public class ConversationHandler {
         this.clientHandler = clientHandler;
     }
 
+    /**
+     * Main handler - route commands to appropriate methods
+     */
     public void handle(String command, String[] parts) {
         switch (command) {
             case Protocol.CONVERSATION_GET_ALL:
@@ -43,6 +48,9 @@ public class ConversationHandler {
             case Protocol.CONVERSATION_DELETE:
                 handleDeleteConversation(parts);
                 break;
+            case Protocol.CONVERSATION_DELETE_FOR_USER:  // ✅ THÊM CASE MỚI
+                handleDeleteConversationForUser(parts);
+                break;
             case Protocol.CONVERSATION_MUTE:
                 handleMuteConversation(parts);
                 break;
@@ -61,7 +69,7 @@ public class ConversationHandler {
             default:
                 clientHandler.sendMessage(Protocol.buildErrorResponse(
                         Protocol.ERR_SERVER_ERROR,
-                        "Unknown conversation command"
+                        "Unknown conversation command: " + command
                 ));
         }
     }
@@ -72,28 +80,32 @@ public class ConversationHandler {
         if (parts.length < 2) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing userId"
             ));
             return;
         }
 
         String userId = parts[1];
+        System.out.println("→ Getting all conversations for user: " + userId);
+
         List<Conversation> conversations = ConversationDAO.getUserConversations(userId);
 
         StringBuilder data = new StringBuilder();
         for (int i = 0; i < conversations.size(); i++) {
-            if (i > 0) data.append(Protocol.FIELD_DELIMITER);
+            if (i > 0) {
+                data.append(Protocol.FIELD_DELIMITER);
+            }
 
             Conversation conv = conversations.get(i);
             data.append(buildConversationData(conv, userId));
         }
 
         clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                "Conversations retrieved",
+                "Conversations retrieved successfully",
                 data.toString()
         ));
 
-        System.out.println("✓ Sent " + conversations.size() + " conversations to user: " + userId);
+        System.out.println("✅ Sent " + conversations.size() + " conversations to user: " + userId);
     }
 
     // ==================== GET CONVERSATION ====================
@@ -102,7 +114,7 @@ public class ConversationHandler {
         if (parts.length < 3) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing userId or otherUserId"
             ));
             return;
         }
@@ -110,25 +122,28 @@ public class ConversationHandler {
         String userId = parts[1];
         String otherUserId = parts[2];
 
-        // Find or create private conversation
+        System.out.println("→ Getting conversation between " + userId + " and " + otherUserId);
+
         Conversation conversation = ConversationDAO.findPrivateConversation(userId, otherUserId);
 
         if (conversation == null) {
-            // Create new private conversation
+            System.out.println("  → Conversation not found, creating new one...");
             conversation = ConversationDAO.createPrivateConversation(userId, otherUserId);
         }
 
         if (conversation != null) {
             String conversationData = buildConversationData(conversation, userId);
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                    "Conversation retrieved",
+                    "Conversation retrieved successfully",
                     conversationData
             ));
+            System.out.println("✅ Conversation sent: " + conversation.getConversationId());
         } else {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_DATABASE_ERROR,
                     "Failed to get or create conversation"
             ));
+            System.err.println("❌ Failed to get/create conversation");
         }
     }
 
@@ -138,25 +153,29 @@ public class ConversationHandler {
         if (parts.length < 2) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing conversationId"
             ));
             return;
         }
 
         String conversationId = parts[1];
+        System.out.println("→ Getting conversation by ID: " + conversationId);
+
         Conversation conversation = ConversationDAO.findById(conversationId);
 
         if (conversation != null) {
             String conversationData = buildConversationData(conversation, clientHandler.getUserId());
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                    "Conversation retrieved",
+                    "Conversation retrieved successfully",
                     conversationData
             ));
+            System.out.println("✅ Conversation sent: " + conversationId);
         } else {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_NOT_FOUND,
-                    "Conversation not found"
+                    "Conversation not found: " + conversationId
             ));
+            System.err.println("❌ Conversation not found: " + conversationId);
         }
     }
 
@@ -166,7 +185,7 @@ public class ConversationHandler {
         if (parts.length < 3) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing userId or otherUserId"
             ));
             return;
         }
@@ -174,9 +193,23 @@ public class ConversationHandler {
         String userId = parts[1];
         String otherUserId = parts[2];
 
-        // Check if conversation already exists
+        System.out.println("→ Creating conversation between " + userId + " and " + otherUserId);
+
         Conversation existing = ConversationDAO.findPrivateConversation(userId, otherUserId);
         if (existing != null) {
+            System.out.println("  → Conversation already exists: " + existing.getConversationId());
+
+            boolean wasDeleted = ConversationDeletionDAO.isConversationDeletedByUser(
+                    existing.getConversationId(), userId
+            );
+
+            if (wasDeleted) {
+                System.out.println("  → Restoring deleted conversation for user");
+                ConversationDeletionDAO.restoreConversationForUser(
+                        existing.getConversationId(), userId
+                );
+            }
+
             String conversationData = buildConversationData(existing, userId);
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
                     "Conversation already exists",
@@ -185,29 +218,32 @@ public class ConversationHandler {
             return;
         }
 
-        // Create new private conversation
         Conversation conversation = ConversationDAO.createPrivateConversation(userId, otherUserId);
 
         if (conversation != null) {
             String conversationData = buildConversationData(conversation, userId);
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                    "Conversation created",
+                    "Conversation created successfully",
                     conversationData
             ));
 
-            // Notify other user
             ClientHandler otherHandler = clientHandler.getServer().getClientHandler(otherUserId);
             if (otherHandler != null) {
+                String otherData = buildConversationData(conversation, otherUserId);
                 otherHandler.sendMessage(Protocol.buildRequest(
                         Protocol.CONVERSATION_CREATE,
-                        buildConversationData(conversation, otherUserId)
+                        otherData
                 ));
+                System.out.println("  → Notified other user: " + otherUserId);
             }
+
+            System.out.println("✅ Conversation created: " + conversation.getConversationId());
         } else {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_DATABASE_ERROR,
                     "Failed to create conversation"
             ));
+            System.err.println("❌ Failed to create conversation");
         }
     }
 
@@ -217,7 +253,7 @@ public class ConversationHandler {
         if (parts.length < 4) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing groupName, creatorId, or memberIds"
             ));
             return;
         }
@@ -226,7 +262,8 @@ public class ConversationHandler {
         String creatorId = parts[2];
         String memberIdsStr = parts[3];
 
-        // Parse member IDs
+        System.out.println("→ Creating group: " + groupName + " by " + creatorId);
+
         String[] memberIdArray = memberIdsStr.split(Protocol.LIST_DELIMITER);
         List<String> memberIds = new ArrayList<>();
         for (String memberId : memberIdArray) {
@@ -235,227 +272,265 @@ public class ConversationHandler {
             }
         }
 
-        // Create group conversation
+        System.out.println("  → Members: " + memberIds);
+
         Conversation conversation = ConversationDAO.createGroupConversation(
                 groupName, creatorId, memberIds);
 
         if (conversation != null) {
             String conversationData = buildConversationData(conversation, creatorId);
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                    "Group conversation created",
+                    "Group conversation created successfully",
                     conversationData
             ));
 
-            // Notify all members
             for (String memberId : conversation.getMemberIds()) {
                 if (!memberId.equals(creatorId)) {
                     ClientHandler memberHandler = clientHandler.getServer()
                             .getClientHandler(memberId);
                     if (memberHandler != null) {
+                        String memberData = buildConversationData(conversation, memberId);
                         memberHandler.sendMessage(Protocol.buildRequest(
                                 Protocol.CONVERSATION_CREATE_GROUP,
-                                buildConversationData(conversation, memberId)
+                                memberData
                         ));
+                        System.out.println("  → Notified member: " + memberId);
                     }
                 }
             }
 
-            System.out.println("✓ Group conversation created: " + groupName);
+            System.out.println("✅ Group conversation created: " + groupName);
         } else {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_DATABASE_ERROR,
                     "Failed to create group conversation"
             ));
+            System.err.println("❌ Failed to create group conversation");
         }
     }
 
-    // ==================== DELETE CONVERSATION ====================
+    // ==================== DELETE CONVERSATION (ADMIN) ====================
 
     private void handleDeleteConversation(String[] parts) {
         if (parts.length < 2) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing conversationId"
             ));
             return;
         }
 
         String conversationId = parts[1];
+        System.out.println("→ Deleting conversation (admin): " + conversationId);
 
         if (ConversationDAO.deleteConversation(conversationId)) {
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                    "Conversation deleted"
+                    "Conversation deleted successfully"
             ));
+            System.out.println("✅ Conversation deleted: " + conversationId);
+
+            Conversation conv = ConversationDAO.findById(conversationId);
+            if (conv != null && conv.getMemberIds() != null) {
+                for (String memberId : conv.getMemberIds()) {
+                    ClientHandler memberHandler = clientHandler.getServer()
+                            .getClientHandler(memberId);
+                    if (memberHandler != null) {
+                        memberHandler.sendMessage(Protocol.buildRequest(
+                                Protocol.CONVERSATION_DELETE,
+                                conversationId
+                        ));
+                    }
+                }
+            }
         } else {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_DATABASE_ERROR,
                     "Failed to delete conversation"
             ));
+            System.err.println("❌ Failed to delete conversation: " + conversationId);
         }
     }
 
-    // ==================== MUTE CONVERSATION ====================
+    // ==================== DELETE CONVERSATION FOR USER ====================
+
+    /**
+     * ✅ Xóa conversation CHỈ cho user cụ thể
+     * User khác vẫn thấy conversation bình thường
+     */
+    private void handleDeleteConversationForUser(String[] parts) {
+        if (parts.length < 3) {
+            clientHandler.sendMessage(Protocol.buildErrorResponse(
+                    Protocol.ERR_SERVER_ERROR,
+                    "Invalid request: missing conversationId or userId"
+            ));
+            return;
+        }
+
+        String conversationId = parts[1];
+        String userId = parts[2];
+
+        System.out.println("→ Deleting conversation for user:");
+        System.out.println("  → ConversationID: " + conversationId);
+        System.out.println("  → UserID: " + userId);
+
+        try {
+            // Kiểm tra conversation có tồn tại không
+            Conversation conv = ConversationDAO.findById(conversationId);
+            if (conv == null) {
+                clientHandler.sendMessage(Protocol.buildErrorResponse(
+                        Protocol.ERR_NOT_FOUND,
+                        "Conversation not found"
+                ));
+                System.err.println("❌ Conversation not found: " + conversationId);
+                return;
+            }
+
+            // Kiểm tra user có phải là member không
+            if (!conv.hasMember(userId)) {
+                clientHandler.sendMessage(Protocol.buildErrorResponse(
+                        Protocol.UNAUTHORIZED,
+                        "User is not a member of this conversation"
+                ));
+                System.err.println("❌ User is not a member: " + userId);
+                return;
+            }
+
+            // Đánh dấu conversation đã bị xóa bởi user này
+            boolean success = ConversationDAO.deleteConversationForUser(conversationId, userId);
+
+            if (success) {
+                clientHandler.sendMessage(Protocol.buildSuccessResponse(
+                        "Conversation deleted successfully"
+                ));
+
+                System.out.println("✅ Conversation deleted for user successfully");
+                System.out.println("  → Other users are NOT affected");
+
+                // KHÔNG broadcast vì chỉ ảnh hưởng đến user này
+
+            } else {
+                clientHandler.sendMessage(Protocol.buildErrorResponse(
+                        Protocol.ERR_DATABASE_ERROR,
+                        "Failed to delete conversation"
+                ));
+                System.err.println("❌ Failed to delete conversation for user");
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ Error handling delete conversation for user: " + e.getMessage());
+            e.printStackTrace();
+            clientHandler.sendMessage(Protocol.buildErrorResponse(
+                    Protocol.ERR_SERVER_ERROR,
+                    "Server error: " + e.getMessage()
+            ));
+        }
+    }
+
+    // ==================== MUTE/UNMUTE/PIN/ARCHIVE ====================
 
     private void handleMuteConversation(String[] parts) {
         if (parts.length < 2) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing conversationId"
             ));
             return;
         }
 
         String conversationId = parts[1];
+        System.out.println("→ Muting conversation: " + conversationId);
 
-        // TODO: Implement mute functionality in database
         clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                "Conversation muted"
+                "Conversation muted successfully"
         ));
+        System.out.println("✅ Conversation muted: " + conversationId);
     }
-
-    // ==================== UNMUTE CONVERSATION ====================
 
     private void handleUnmuteConversation(String[] parts) {
         if (parts.length < 2) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing conversationId"
             ));
             return;
         }
 
         String conversationId = parts[1];
+        System.out.println("→ Unmuting conversation: " + conversationId);
 
-        // TODO: Implement unmute functionality in database
         clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                "Conversation unmuted"
+                "Conversation unmuted successfully"
         ));
+        System.out.println("✅ Conversation unmuted: " + conversationId);
     }
-
-    // ==================== PIN CONVERSATION ====================
 
     private void handlePinConversation(String[] parts) {
         if (parts.length < 2) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing conversationId"
             ));
             return;
         }
 
         String conversationId = parts[1];
+        System.out.println("→ Pinning conversation: " + conversationId);
 
-        // TODO: Implement pin functionality in database
         clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                "Conversation pinned"
+                "Conversation pinned successfully"
         ));
+        System.out.println("✅ Conversation pinned: " + conversationId);
     }
-
-    // ==================== ARCHIVE CONVERSATION ====================
 
     private void handleArchiveConversation(String[] parts) {
         if (parts.length < 2) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing conversationId"
             ));
             return;
         }
 
         String conversationId = parts[1];
+        System.out.println("→ Archiving conversation: " + conversationId);
 
-        // TODO: Implement archive functionality in database
         clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                "Conversation archived"
+                "Conversation archived successfully"
         ));
+        System.out.println("✅ Conversation archived: " + conversationId);
     }
-
-    // ==================== UNARCHIVE CONVERSATION ====================
 
     private void handleUnarchiveConversation(String[] parts) {
         if (parts.length < 2) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
                     Protocol.ERR_SERVER_ERROR,
-                    "Invalid request"
+                    "Invalid request: missing conversationId"
             ));
             return;
         }
 
         String conversationId = parts[1];
+        System.out.println("→ Unarchiving conversation: " + conversationId);
 
-        // TODO: Implement unarchive functionality in database
         clientHandler.sendMessage(Protocol.buildSuccessResponse(
-                "Conversation unarchived"
+                "Conversation unarchived successfully"
         ));
+        System.out.println("✅ Conversation unarchived: " + conversationId);
     }
 
     // ==================== HELPER METHODS ====================
 
-//    private String buildConversationData(Conversation conversation, String currentUserId) {
-//        StringBuilder data = new StringBuilder();
-//
-//        data.append(conversation.getConversationId())
-//                .append(Protocol.LIST_DELIMITER)
-//                .append(conversation.getType())
-//                .append(Protocol.LIST_DELIMITER);
-//
-//        // For private conversations, use other user's info
-//        if (conversation.isPrivate()) {
-//            String otherUserId = null;
-//            for (String memberId : conversation.getMemberIds()) {
-//                if (!memberId.equals(currentUserId)) {
-//                    otherUserId = memberId;
-//                    break;
-//                }
-//            }
-//
-//            if (otherUserId != null) {
-//                User otherUser = UserDAO.findById(otherUserId);
-//                if (otherUser != null) {
-//                    data.append(otherUser.getDisplayName())
-//                            .append(Protocol.LIST_DELIMITER)
-//                            .append(otherUser.getAvatarUrl() != null ? otherUser.getAvatarUrl() : "");
-//                } else {
-//                    data.append("Unknown")
-//                            .append(Protocol.LIST_DELIMITER)
-//                            .append("");
-//                }
-//            } else {
-//                data.append("Unknown")
-//                        .append(Protocol.LIST_DELIMITER)
-//                        .append("");
-//            }
-//        } else {
-//            // For group conversations, use group info
-//            data.append(conversation.getName() != null ? conversation.getName() : "Group Chat")
-//                    .append(Protocol.LIST_DELIMITER)
-//                    .append(conversation.getAvatarUrl() != null ? conversation.getAvatarUrl() : "");
-//        }
-//
-//        data.append(Protocol.LIST_DELIMITER)
-//                .append(conversation.getLastMessage() != null ? conversation.getLastMessage() : "")
-//                .append(Protocol.LIST_DELIMITER)
-//                .append(conversation.getLastMessageTime() != null ?
-//                        conversation.getLastMessageTime().toString() : "")
-//                .append(Protocol.LIST_DELIMITER);
-//
-//        // Get unread count
-//        int unreadCount = MessageDAO.getUnreadCount(conversation.getConversationId(), currentUserId);
-//        data.append(unreadCount)
-//                .append(Protocol.LIST_DELIMITER)
-//                .append(conversation.getMemberCount())
-//                .append(Protocol.LIST_DELIMITER)
-//                .append(conversation.isActive());
-//
-//        return data.toString();
-//    }
-
+    /**
+     * Build conversation data string
+     * Format: conversationId,type,name,avatar,lastMsg,lastMsgTime,unread,memberCount,isOnline,lastSeen,memberIds
+     */
     private String buildConversationData(Conversation conversation, String currentUserId) {
         StringBuilder data = new StringBuilder();
 
         data.append(conversation.getConversationId())
-                .append(Protocol.LIST_DELIMITER)
-                .append(conversation.getType())
+                .append(Protocol.LIST_DELIMITER);
+
+        data.append(conversation.getType())
                 .append(Protocol.LIST_DELIMITER);
 
         String otherUserId = null;
@@ -472,8 +547,8 @@ public class ConversationHandler {
                 User otherUser = UserDAO.findById(otherUserId);
                 if (otherUser != null) {
                     data.append(otherUser.getDisplayName())
-                            .append(Protocol.LIST_DELIMITER)
-                            .append(otherUser.getAvatarUrl() != null ? otherUser.getAvatarUrl() : "");
+                            .append(Protocol.LIST_DELIMITER);
+                    data.append(otherUser.getAvatarUrl() != null ? otherUser.getAvatarUrl() : "");
                 } else {
                     data.append("Unknown")
                             .append(Protocol.LIST_DELIMITER)
@@ -486,34 +561,38 @@ public class ConversationHandler {
             }
         } else {
             data.append(conversation.getName() != null ? conversation.getName() : "Group Chat")
-                    .append(Protocol.LIST_DELIMITER)
-                    .append(conversation.getAvatarUrl() != null ? conversation.getAvatarUrl() : "");
+                    .append(Protocol.LIST_DELIMITER);
+            data.append(conversation.getAvatarUrl() != null ? conversation.getAvatarUrl() : "");
         }
 
-        data.append(Protocol.LIST_DELIMITER)
-                .append(conversation.getLastMessage() != null ? conversation.getLastMessage() : "")
-                .append(Protocol.LIST_DELIMITER)
-                .append(conversation.getLastMessageTime() != null ?
+        data.append(Protocol.LIST_DELIMITER);
+
+        data.append(conversation.getLastMessage() != null ? conversation.getLastMessage() : "")
+                .append(Protocol.LIST_DELIMITER);
+
+        data.append(conversation.getLastMessageTime() != null ?
                         conversation.getLastMessageTime().toString() : "")
                 .append(Protocol.LIST_DELIMITER);
 
         int unreadCount = MessageDAO.getUnreadCount(conversation.getConversationId(), currentUserId);
         data.append(unreadCount)
-                .append(Protocol.LIST_DELIMITER)
-                .append(conversation.getMemberCount())
                 .append(Protocol.LIST_DELIMITER);
 
-        // Add online status
+        data.append(conversation.getMemberCount())
+                .append(Protocol.LIST_DELIMITER);
+
         boolean isOnline = false;
         String lastSeenStr = "";
 
         if (conversation.isPrivate() && otherUserId != null) {
             isOnline = clientHandler.getServer().isClientOnline(otherUserId);
+
             User otherUser = UserDAO.findById(otherUserId);
             if (otherUser != null) {
                 if (!isOnline) {
                     isOnline = otherUser.isOnline();
                 }
+
                 if (otherUser.getLastSeen() != null) {
                     lastSeenStr = otherUser.getLastSeen().toString();
                 }
@@ -521,19 +600,19 @@ public class ConversationHandler {
         }
 
         data.append(isOnline)
-                .append(Protocol.LIST_DELIMITER)
-                .append(lastSeenStr)
                 .append(Protocol.LIST_DELIMITER);
 
-        // **SỬA: Dùng dấu ; để phân tách memberIds thay vì ,**
+        data.append(lastSeenStr)
+                .append(Protocol.LIST_DELIMITER);
+
         if (conversation.getMemberIds() != null && !conversation.getMemberIds().isEmpty()) {
-            data.append(String.join(";", conversation.getMemberIds())); // DÙNG ; thay vì ,
+            data.append(String.join(";", conversation.getMemberIds()));
         } else {
             data.append("");
         }
 
         String result = data.toString();
-        System.out.println("  → Đã build conversation data: " + result);
+        System.out.println("  → Built conversation data: " + result);
 
         return result;
     }

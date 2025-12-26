@@ -1,4 +1,3 @@
-// ==================== ConversationService.java ====================
 package org.example.chatappclient.client.services;
 
 import org.example.chatappclient.client.SocketClient;
@@ -12,14 +11,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
+import java.util.function.Consumer;
 
 /**
- * Service xử lý các thao tác với Conversation
+ * Service xử lý các thao tác với Conversation - WITH AUTO MESSAGE UPDATES
  */
 public class ConversationService {
 
     private static volatile ConversationService instance;
     private final SocketClient socketClient;
+    private Consumer<String> onConversationRestored;
 
     // Callbacks
     private BiConsumer<String, Message> onNewMessage;
@@ -43,9 +44,6 @@ public class ConversationService {
 
     // ==================== CRUD ====================
 
-    /**
-     * Lấy tất cả conversations của user
-     */
     public List<Conversation> getAllConversations(String userId) throws Exception {
         String request = Protocol.buildRequest(Protocol.CONVERSATION_GET_ALL, userId);
         String response = socketClient.sendRequest(request, 10000);
@@ -57,9 +55,6 @@ public class ConversationService {
         return parseConversations(data);
     }
 
-    /**
-     * Lấy conversation theo ID
-     */
     public Conversation getConversation(String conversationId) throws Exception {
         String request = Protocol.buildRequest(Protocol.CONVERSATION_GET_BY_ID, conversationId);
         String response = socketClient.sendRequest(request, 10000);
@@ -70,9 +65,6 @@ public class ConversationService {
         return parseConversation(Protocol.getData(response));
     }
 
-    /**
-     * Tìm hoặc tạo conversation private với user
-     */
     public Conversation findOrCreatePrivateChat(String userId, String targetQuery) throws Exception {
         String request = Protocol.buildRequest(Protocol.CONVERSATION_CREATE, userId, targetQuery, "private");
         String response = socketClient.sendRequest(request, 10000);
@@ -83,9 +75,6 @@ public class ConversationService {
         return parseConversation(Protocol.getData(response));
     }
 
-    /**
-     * Tạo nhóm chat
-     */
     public Conversation createGroup(String userId, String groupName, List<String> memberIds) throws Exception {
         String members = String.join(",", memberIds);
         String request = Protocol.buildRequest(Protocol.CONVERSATION_CREATE_GROUP, userId, groupName, members);
@@ -97,9 +86,27 @@ public class ConversationService {
         return parseConversation(Protocol.getData(response));
     }
 
-    /**
-     * Xóa conversation
-     */
+    public void deleteConversationForCurrentUser(String conversationId) throws Exception {
+        String userId = AuthService.getInstance().getCurrentUser().getUserId();
+        String request = Protocol.buildRequest(
+                Protocol.CONVERSATION_DELETE_FOR_USER,
+                conversationId,
+                userId
+        );
+
+        String response = socketClient.sendRequest(request, 10000);
+
+        if (response == null) {
+            throw new Exception("Server không phản hồi");
+        }
+
+        if (!Protocol.isSuccess(response)) {
+            throw new Exception(Protocol.getErrorMessage(response));
+        }
+
+        System.out.println("✅ Conversation deleted for user: " + userId);
+    }
+
     public void deleteConversation(String conversationId) throws Exception {
         String request = Protocol.buildRequest(Protocol.CONVERSATION_DELETE, conversationId);
         String response = socketClient.sendRequest(request, 10000);
@@ -110,34 +117,22 @@ public class ConversationService {
 
     // ==================== ACTIONS ====================
 
-    /**
-     * Đánh dấu đã đọc
-     */
     public void markAsRead(String conversationId, String userId) throws Exception {
         String request = Protocol.buildRequest(Protocol.MESSAGE_MARK_READ, conversationId, userId);
         socketClient.sendMessage(request);
     }
 
-    /**
-     * Tắt/bật thông báo
-     */
     public void muteConversation(String conversationId, boolean mute) throws Exception {
         String command = mute ? Protocol.CONVERSATION_MUTE : Protocol.CONVERSATION_UNMUTE;
         String request = Protocol.buildRequest(command, conversationId);
         socketClient.sendMessage(request);
     }
 
-    /**
-     * Ghim conversation
-     */
     public void pinConversation(String conversationId, boolean pin) throws Exception {
         String request = Protocol.buildRequest(Protocol.CONVERSATION_PIN, conversationId, String.valueOf(pin));
         socketClient.sendMessage(request);
     }
 
-    /**
-     * Lưu trữ conversation
-     */
     public void archiveConversation(String conversationId) throws Exception {
         String request = Protocol.buildRequest(Protocol.CONVERSATION_ARCHIVE, conversationId);
         socketClient.sendMessage(request);
@@ -145,9 +140,6 @@ public class ConversationService {
 
     // ==================== PARSING ====================
 
-    /**
-     * Parse danh sách conversations từ data
-     */
     private List<Conversation> parseConversations(String data) {
         List<Conversation> list = new ArrayList<>();
         if (data == null || data.isEmpty()) return list;
@@ -159,10 +151,6 @@ public class ConversationService {
         return list;
     }
 
-    /**
-     * Parse một conversation từ data string
-     * Format: conversationId,type,name,avatarUrl,lastMessage,lastMessageTime,unreadCount,memberCount,isOnline,lastSeenTime
-     */
     private Conversation parseConversation(String data) {
         if (data == null || data.isEmpty()) return null;
         String[] f = Protocol.parseFields(data);
@@ -170,18 +158,15 @@ public class ConversationService {
 
         Conversation c = new Conversation();
 
-        // Basic info
         c.setConversationId(f[0]);
         c.setType(f[1]);
         c.setName(f[2]);
         c.setAvatarUrl(f[3]);
 
-        // Last message
         if (f.length > 4 && f[4] != null && !f[4].isEmpty()) {
             c.setLastMessage(f[4]);
         }
 
-        // Last message time
         if (f.length > 5 && f[5] != null && !f[5].isEmpty()) {
             try {
                 LocalDateTime time = LocalDateTime.parse(f[5], DateTimeFormatter.ISO_LOCAL_DATE_TIME);
@@ -191,19 +176,14 @@ public class ConversationService {
             }
         }
 
-        // Unread count
         if (f.length > 6) {
             c.setUnreadCount(parseInt(f[6]));
         }
 
-        // Skip memberCount (index 7) - sẽ tính từ memberIds
-
-        // Online status
         if (f.length > 8) {
             c.setActive(Boolean.parseBoolean(f[8]));
         }
 
-        // Last seen time
         if (f.length > 9 && f[9] != null && !f[9].isEmpty() && !f[9].equals("null")) {
             try {
                 LocalDateTime lastSeen = LocalDateTime.parse(f[9], DateTimeFormatter.ISO_LOCAL_DATE_TIME);
@@ -213,9 +193,8 @@ public class ConversationService {
             }
         }
 
-        // **SỬA: Split theo ; thay vì ,**
         if (f.length > 10 && f[10] != null && !f[10].isEmpty()) {
-            String[] memberIds = f[10].split(";"); // DÙNG ; thay vì ,
+            String[] memberIds = f[10].split(";");
             List<String> members = new ArrayList<>();
             for (String id : memberIds) {
                 if (id != null && !id.trim().isEmpty()) {
@@ -223,17 +202,11 @@ public class ConversationService {
                 }
             }
             c.setMemberIds(members);
-            System.out.println("  → Parsed memberIds: " + members + " (count: " + members.size() + ")");
-        } else {
-            System.out.println("  ⚠️ No memberIds in conversation data!");
         }
 
         return c;
     }
 
-    /**
-     * Parse integer an toàn
-     */
     private int parseInt(String s) {
         try {
             return Integer.parseInt(s);
@@ -242,91 +215,134 @@ public class ConversationService {
         }
     }
 
+    public void setOnConversationRestored(Consumer<String> callback) {
+        this.onConversationRestored = callback;
+    }
+
+    public void handleConversationRestored(String message) {
+        if (onConversationRestored != null) {
+            onConversationRestored.accept(message);
+        }
+    }
+
     // ==================== REALTIME SETUP ====================
 
     /**
-     * Setup các handler nhận real-time events từ server
+     * ✅ FIXED: Setup handlers và TỰ ĐỘNG xử lý tin nhắn mới
      */
-//    private void setupRealtimeHandlers() {
-//        // Handler cho USER_STATUS_CHANGED
-//        socketClient.registerHandler(Protocol.USER_STATUS_CHANGED, message -> {
-//            handleUserStatusChange(message);
-//        });
-//
-//        // Handler cho MESSAGE_NEW (nếu cần)
-//        socketClient.registerHandler(Protocol.MESSAGE_NEW, message -> {
-//            handleNewMessage(message);
-//        });
-//    }
-//
-//    /**
-//     * Xử lý thông báo user status change từ server
-//     * Format: USER_STATUS_CHANGED|||userId|||isOnline|||statusText|||lastSeen
-//     */
-//    private void handleUserStatusChange(String message) {
-//        try {
-//            String[] parts = message.split(Pattern.quote(Protocol.DELIMITER));
-//            if (parts.length >= 5) {
-//                String userId = parts[1];
-//                boolean isOnline = Boolean.parseBoolean(parts[2]);
-//                // String statusText = parts[3]; // Không cần dùng
-//                String lastSeen = parts[4];
-//
-//                // Gọi callback nếu đã được đăng ký
-//                if (onUserOnlineStatus != null) {
-//                    onUserOnlineStatus.accept(userId, isOnline, lastSeen);
-//                }
-//
-//                System.out.println("→ User status updated: " + userId + " - " +
-//                        (isOnline ? "ONLINE" : "OFFLINE"));
-//            }
-//        } catch (Exception e) {
-//            System.err.println("⚠️ Error handling user status change: " + e.getMessage());
-//            e.printStackTrace();
-//        }
-//    }
-
     private void setupRealtimeHandlers() {
-        System.out.println("→ Đang thiết lập các handler realtime...");
+        System.out.println("→ Thiết lập các handler realtime trong ConversationService...");
 
-        // Handler khi user thay đổi trạng thái online/offline
+        // ✅ Handler cho USER_STATUS_CHANGED
         socketClient.registerHandler(Protocol.USER_STATUS_CHANGED, message -> {
             System.out.println("→ ConversationService nhận USER_STATUS_CHANGED");
             handleUserStatusChange(message);
         });
 
-//        // Handler khi có tin nhắn mới
-//        socketClient.registerHandler(Protocol.MESSAGE_RECEIVE, message -> {
-//            System.out.println("→ ConversationService nhận MESSAGE_RECEIVE");
-//            handleNewMessage(message);
-//        });
+        // ✅ Handler cho MESSAGE_RECEIVE - TỰ ĐỘNG XỬ LÝ
+        socketClient.registerHandler(Protocol.MESSAGE_RECEIVE, message -> {
+            System.out.println("→ ConversationService nhận MESSAGE_RECEIVE: " + message);
+            handleNewMessage(message);
+        });
 
-        System.out.println("✅ Đã đăng ký các handler realtime");
+        // ✅ Handler cho CONVERSATION_RESTORED
+        socketClient.registerHandler(Protocol.CONVERSATION_RESTORED, message -> {
+            System.out.println("→ ConversationService nhận CONVERSATION_RESTORED");
+            handleConversationRestored(message);
+        });
+
+        System.out.println("✅ Đã đăng ký các handler realtime trong ConversationService");
     }
 
     /**
-     * Xử lý sự kiện thay đổi trạng thái online của user từ server
-     * Format dữ liệu gửi về:
-     *    userId|||isOnline|||statusText|||lastSeen
+     * ✅ FIXED: Xử lý tin nhắn mới - TỰ ĐỘNG GỌI CALLBACK
+     */
+    private void handleNewMessage(String data) {
+        try {
+            System.out.println("→ ConversationService đang parse MESSAGE_RECEIVE: " + data);
+
+            String[] parts = data.split("\\|\\|\\|");
+
+            if (parts.length < 5) {
+                System.err.println("❌ Invalid MESSAGE_RECEIVE format, parts: " + parts.length);
+                return;
+            }
+
+            // Parse message
+            Message message = new Message();
+            message.setMessageId(parts[1]);
+            message.setConversationId(parts[2]);
+            message.setSenderId(parts[3]);
+            message.setContent(parts[4]);
+
+            if (parts.length > 5 && parts[5] != null && !parts[5].isEmpty()) {
+                message.setMessageType(parts[5]);
+            } else {
+                message.setMessageType("text");
+            }
+
+            if (parts.length > 6 && parts[6] != null && !parts[6].isEmpty()) {
+                message.setMediaUrl(parts[6]);
+            }
+
+            if (parts.length > 7 && parts[7] != null && !parts[7].isEmpty()) {
+                message.setSenderName(parts[7]);
+            }
+
+            if (parts.length > 8 && parts[8] != null && !parts[8].isEmpty()) {
+                message.setSenderAvatar(parts[8]);
+            }
+
+            if (parts.length > 9 && parts[9] != null && !parts[9].isEmpty()) {
+                message.setFileName(parts[9]);
+            }
+
+            if (parts.length > 10) {
+                try {
+                    message.setFileSize(Long.parseLong(parts[10]));
+                } catch (Exception ignored) {}
+            }
+
+            message.setTimestamp(LocalDateTime.now());
+
+            System.out.println("✅ ConversationService parsed message:");
+            System.out.println("   ID: " + message.getMessageId());
+            System.out.println("   ConversationID: " + message.getConversationId());
+            System.out.println("   Content: " + message.getContent());
+
+            // ✅ TỰ ĐỘNG GỌI CALLBACK
+            if (onNewMessage != null) {
+                System.out.println("→ Calling onNewMessage callback từ ConversationService");
+                onNewMessage.accept(message.getConversationId(), message);
+                System.out.println("  ✅ Callback executed successfully");
+            } else {
+                System.err.println("⚠️ onNewMessage callback is NULL trong ConversationService!");
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ Error handling new message: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Xử lý thay đổi trạng thái user
      */
     private void handleUserStatusChange(String data) {
         try {
             System.out.println("→ handleUserStatusChange dữ liệu: " + data);
 
-            // Tách dữ liệu theo "|||"
             String[] parts = data.split("\\|\\|\\|");
 
             if (parts.length >= 4) {
                 String userId = parts[0];
                 boolean isOnline = Boolean.parseBoolean(parts[1]);
-                String statusText = parts[2]; // Ví dụ: "Đang hoạt động", "Vừa truy cập..."
-                String lastSeen = parts[3];   // Ví dụ: "2025-12-03T08:20:15"
+                String statusText = parts[2];
+                String lastSeen = parts[3];
 
                 System.out.println("  → Đã parse - UserID: " + userId + ", Online: " + isOnline);
 
-                // Gọi callback nếu đã đăng ký
                 if (onUserOnlineStatus != null) {
-                    // Nếu callback có 3 tham số → bạn cần BiConsumer3 (tự định nghĩa)
                     onUserOnlineStatus.accept(userId, isOnline, lastSeen);
                     System.out.println("  ✅ Đã gọi callback cập nhật trạng thái online");
                 } else {
@@ -341,87 +357,18 @@ public class ConversationService {
         }
     }
 
-    /**
-     * Xử lý tin nhắn mới từ server
-     */
-    /**
-     * Xử lý tin nhắn mới từ server
-     * Format: MESSAGE_RECEIVE|||messageId|||conversationId|||senderId|||content|||type|||mediaUrl|||senderName|||senderAvatar
-     */
-    private void handleNewMessage(String data) {
-        try {
-            System.out.println("→ Parsing MESSAGE_RECEIVE data: " + data);
-
-            // Split theo delimiter của Protocol
-            String[] parts = data.split("\\|\\|\\|");
-
-            if (parts.length < 5) {
-                System.err.println("❌ Invalid MESSAGE_RECEIVE format, parts: " + parts.length);
-                return;
-            }
-
-            // Parse message - BỎ QUA parts[0] vì nó là command "MESSAGE_RECEIVE"
-            Message message = new Message();
-            message.setMessageId(parts[1]);           // messageId
-            message.setConversationId(parts[2]);      // conversationId
-            message.setSenderId(parts[3]);            // senderId
-            message.setContent(parts[4]);             // content
-
-            // Optional fields
-            if (parts.length > 5 && parts[5] != null && !parts[5].isEmpty()) {
-                message.setMessageType(parts[5]);     // type
-            } else {
-                message.setMessageType("text");
-            }
-
-            if (parts.length > 6 && parts[6] != null && !parts[6].isEmpty()) {
-                message.setMediaUrl(parts[6]);        // mediaUrl
-            }
-
-            if (parts.length > 7 && parts[7] != null && !parts[7].isEmpty()) {
-                message.setSenderName(parts[7]);      // senderName
-            }
-
-            if (parts.length > 8 && parts[8] != null && !parts[8].isEmpty()) {
-                message.setSenderAvatar(parts[8]);    // senderAvatar
-            }
-
-            // Set timestamp to now
-            message.setTimestamp(LocalDateTime.now());
-
-            System.out.println("✅ Parsed message:");
-            System.out.println("   ID: " + message.getMessageId());
-            System.out.println("   ConversationID: " + message.getConversationId());
-            System.out.println("   Content: " + message.getContent());
-            System.out.println("   Sender: " + message.getSenderName());
-
-            // Gọi callback để thông báo cho UI
-            if (onNewMessage != null) {
-                System.out.println("→ Calling onNewMessage callback");
-                onNewMessage.accept(message.getConversationId(), message);
-                System.out.println("  ✅ Handler executed");
-            } else {
-                System.err.println("⚠️ onNewMessage callback is NULL!");
-            }
-
-        } catch (Exception e) {
-            System.err.println("❌ Error handling new message: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
     // ==================== CALLBACKS ====================
 
     /**
-     * Đăng ký callback khi có tin nhắn mới
+     * ✅ Đăng ký callback khi có tin nhắn mới
      */
     public void setOnNewMessage(BiConsumer<String, Message> callback) {
         this.onNewMessage = callback;
+        System.out.println("✅ Đã đăng ký callback onNewMessage trong ConversationService");
     }
 
     /**
      * Đăng ký callback khi có user thay đổi trạng thái online
-     * @param callback (userId, isOnline, lastSeenStr)
      */
     public void setOnUserOnlineStatus(TriConsumer<String, Boolean, String> callback) {
         this.onUserOnlineStatus = callback;
@@ -430,9 +377,6 @@ public class ConversationService {
 
     // ==================== FUNCTIONAL INTERFACE ====================
 
-    /**
-     * Functional interface cho callback với 3 tham số
-     */
     @FunctionalInterface
     public interface TriConsumer<T, U, V> {
         void accept(T t, U u, V v);

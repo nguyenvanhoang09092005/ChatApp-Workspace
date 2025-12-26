@@ -196,8 +196,9 @@ public class DialogFactory {
         // Settings options
         VBox options = new VBox(4);
         options.getChildren().addAll(
-                createSettingsItem("👤", "Chỉnh sửa thông tin cá nhân", () -> {}),
-                createSettingsItem("🔐", "Đổi mật khẩu", () -> {}),
+                createSettingsItem("👤", "Chỉnh sửa thông tin cá nhân",  () -> EditProfileDialog.show(currentUser)),
+                createSettingsItem("🔐", "Đổi mật khẩu",
+                        ChangePasswordDialog::show),
                 createSettingsItem("🔔", "Cài đặt thông báo", () -> {}),
                 createSettingsItem("🌙", "Chế độ tối", () -> {}),
                 createSettingsItem("🌐", "Ngôn ngữ", () -> {}),
@@ -252,4 +253,6 @@ public class DialogFactory {
         item.getChildren().addAll(iconLabel, textLabel, spacer, arrow);
         return item;
     }
+
+
 }

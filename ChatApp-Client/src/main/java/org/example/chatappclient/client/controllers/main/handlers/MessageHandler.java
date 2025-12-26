@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Handler xử lý tin nhắn với đồng bộ hiển thị file giữa người gửi và nhận
+ * MessageHandler - KHÔNG xử lý MESSAGE_RECEIVE (để ConversationService tự động xử lý)
  */
 public class MessageHandler {
 
@@ -35,7 +35,8 @@ public class MessageHandler {
         handlers = new HashMap<>();
         messageService = MessageService.getInstance();
         initializeHandlers();
-        setupMessageServiceCallbacks();
+        // ❌ KHÔNG setup MessageService callbacks ở đây nữa
+        // ConversationService sẽ tự động xử lý MESSAGE_RECEIVE
     }
 
     public static MessageHandler getInstance() {
@@ -56,7 +57,9 @@ public class MessageHandler {
     // ==================== INITIALIZE HANDLERS ====================
 
     private void initializeHandlers() {
-        handlers.put(Protocol.MESSAGE_RECEIVE, this::handleNewMessage);
+        // ❌ REMOVED: MESSAGE_RECEIVE - ConversationService xử lý rồi
+        // handlers.put(Protocol.MESSAGE_RECEIVE, this::handleNewMessage);
+
         handlers.put(Protocol.MESSAGE_READ, this::handleMessageRead);
         handlers.put(Protocol.MESSAGE_DELIVERED, this::handleMessageDelivered);
         handlers.put(Protocol.TYPING_START, this::handleTypingStart);
@@ -69,63 +72,8 @@ public class MessageHandler {
         handlers.put(Protocol.CONVERSATION_GET, this::handleConversationGet);
         handlers.put(Protocol.CONVERSATION_CREATE, this::handleConversationCreate);
         handlers.put(Protocol.NOTIFICATION_NEW, this::handleNewNotification);
-    }
 
-    private void setupMessageServiceCallbacks() {
-        messageService.setOnNewMessage((conversationId, message) -> {
-            Platform.runLater(() -> {
-                if (mainController != null) {
-                    if (conversationId.equals(mainController.getCurrentConversationId())) {
-                        mainController.addMessageToUI(message);
-                    }
-
-                    try {
-                        SoundUtil.playMessageReceived();
-                    } catch (Exception e) {
-                        System.err.println("Cannot play sound: " + e.getMessage());
-                    }
-
-                    if (!conversationId.equals(mainController.getCurrentConversationId())) {
-                        NotificationService.getInstance().showMessageNotification(
-                                message.getSenderName(),
-                                message.getDisplayContent()
-                        );
-                    }
-                }
-            });
-        });
-
-        messageService.setOnTypingStart((conversationId, userId) -> {
-            Platform.runLater(() -> {
-                if (mainController != null &&
-                        conversationId.equals(mainController.getCurrentConversationId())) {
-                    try {
-                        String userName = UserService.getInstance()
-                                .getUser(userId).getUsername();
-                        mainController.showTypingIndicator(userName);
-                    } catch (Exception e) {
-                        mainController.showTypingIndicator("Ai đó");
-                    }
-                }
-            });
-        });
-
-        messageService.setOnTypingStop((conversationId) -> {
-            Platform.runLater(() -> {
-                if (mainController != null &&
-                        conversationId.equals(mainController.getCurrentConversationId())) {
-                    mainController.hideTypingIndicator();
-                }
-            });
-        });
-
-        messageService.setOnMessageRead((messageId, userId) -> {
-            Platform.runLater(() -> {
-                if (mainController != null) {
-                    System.out.println("Message " + messageId + " read by " + userId);
-                }
-            });
-        });
+        System.out.println("✅ MessageHandler initialized (MESSAGE_RECEIVE removed)");
     }
 
     private void handleConversationGet(String message) {
@@ -147,80 +95,16 @@ public class MessageHandler {
         if (handler != null) {
             Platform.runLater(() -> handler.accept(message));
         } else {
-            System.out.println("Unknown command: " + command);
+            // ✅ MESSAGE_RECEIVE sẽ không được log ở đây nữa
+            if (!Protocol.MESSAGE_RECEIVE.equals(command)) {
+                System.out.println("Unknown command: " + command);
+            }
         }
     }
 
     // ==================== MESSAGE HANDLERS ====================
 
-    /**
-     * FIXED: Xử lý tin nhắn nhận được - ĐỒNG BỘ cho cả người gửi và người nhận
-     */
-    private void handleNewMessage(String message) {
-        try {
-            System.out.println("→ Processing MESSAGE_RECEIVE: " + message);
-
-            String[] parts = Protocol.parseMessage(message);
-            if (parts.length < 5) return;
-
-            String messageId = parts[1];
-            String senderId = parts[3];
-            String conversationId = parts[2];
-
-            String currentUserId = AuthService.getInstance().getCurrentUser().getUserId();
-            boolean isFromMe = senderId.equals(currentUserId);
-
-            // FIX CUỐI CÙNG: Chỉ bỏ qua nếu tin nhắn là do MÌNH gửi + đang có loading view
-            if (isFromMe && mainController != null) {
-                boolean hasLoadingView = mainController.getChatMessagesContainer().getChildren().stream()
-                        .anyMatch(node -> node instanceof VBox vbox &&
-                                vbox.getId() != null &&
-                                vbox.getId().startsWith("loading-"));
-
-                if (hasLoadingView) {
-                    System.out.println("Ignored own uploading message: " + messageId);
-                    return; // FileHandler sẽ tự xử lý
-                }
-            }
-
-            // TẤT CẢ TIN NHẮN KHÁC (từ người khác hoặc không có loading) → HIỂN THỊ NGAY
-            Message msg = new Message();
-            msg.setMessageId(messageId);
-            msg.setConversationId(conversationId);
-            msg.setSenderId(senderId);
-            msg.setContent(parts[4]);
-
-            if (parts.length > 5) msg.setMessageType(parts[5]);
-            if (parts.length > 6) msg.setMediaUrl(parts[6]);
-            if (parts.length > 7) msg.setSenderName(parts[7]);
-            if (parts.length > 8) msg.setSenderAvatar(parts[8]);
-            if (parts.length > 9) msg.setFileName(parts[9]);
-            if (parts.length > 10) {
-                try { msg.setFileSize(Long.parseLong(parts[10])); } catch (Exception ignored) {}
-            }
-
-            msg.setTimestamp(LocalDateTime.now());
-
-            Platform.runLater(() -> {
-                if (mainController != null && conversationId.equals(mainController.getCurrentConversationId())) {
-                    mainController.addMessageToUI(msg);
-                    mainController.scrollToBottom();
-                }
-
-                if (!isFromMe) {
-                    try { SoundUtil.playMessageReceived(); } catch (Exception ignored) {}
-                    if (mainController == null || !conversationId.equals(mainController.getCurrentConversationId())) {
-                        NotificationService.getInstance().showMessageNotification(
-                                msg.getSenderName(), msg.getDisplayContent());
-                    }
-                }
-            });
-
-        } catch (Exception e) {
-            System.err.println("Error handling new message: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
+    // ❌ REMOVED: handleNewMessage - ConversationService xử lý rồi
 
     private void handleMessageRead(String message) {
         try {
@@ -433,6 +317,7 @@ public class MessageHandler {
                 cancelReply();
             }
 
+            // ✅ Thêm tin nhắn ngay lập tức (người gửi)
             Platform.runLater(() -> {
                 mainController.addMessageToUI(sentMessage);
             });
@@ -460,9 +345,6 @@ public class MessageHandler {
         }
     }
 
-    /**
-     * Gửi sticker
-     */
     public void sendSticker(String conversationId, StickerData.Sticker sticker) {
         if (conversationId == null || sticker == null) {
             System.err.println("❌ Invalid conversation or sticker");
@@ -472,7 +354,6 @@ public class MessageHandler {
         try {
             System.out.println("📤 Sending sticker: " + sticker.getName() + " to conversation: " + conversationId);
 
-            // Gửi sticker qua MessageService
             Message sentMessage = messageService.sendMediaMessage(
                     conversationId,
                     AuthService.getInstance().getCurrentUser().getUserId(),
@@ -483,13 +364,6 @@ public class MessageHandler {
             );
 
             System.out.println("✅ Sticker sent successfully: " + sentMessage.getMessageId());
-
-            // UI update sẽ được xử lý bởi callback hoặc MainController
-            // Platform.runLater(() -> {
-            //     if (mainController != null) {
-            //         mainController.addMessageToUI(sentMessage);
-            //     }
-            // });
 
         } catch (Exception e) {
             System.err.println("❌ Error sending sticker: " + e.getMessage());
@@ -596,14 +470,6 @@ public class MessageHandler {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    // ==================== HELPERS ====================
-
-    private String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
-        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
     }
 
     // ==================== CLEANUP ====================

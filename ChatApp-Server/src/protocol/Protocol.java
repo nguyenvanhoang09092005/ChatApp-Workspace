@@ -71,6 +71,10 @@ public class Protocol {
     public static final String CONVERSATION_ARCHIVE = "CONVERSATION_ARCHIVE";
     public static final String CONVERSATION_UNARCHIVE = "CONVERSATION_UNARCHIVE";
 
+    public static final String CONVERSATION_DELETE_FOR_USER = "CONVERSATION_DELETE_FOR_USER";
+    public static final String CONVERSATION_RESTORE_FOR_USER = "CONVERSATION_RESTORE_FOR_USER";
+    public static final String CONVERSATION_RESTORED = "CONVERSATION_RESTORED";
+
     public static final String ERR_NOT_FOUND = "ERR_NOT_FOUND";
 
     // ==================== STICKER/EMOJI COMMANDS ====================
@@ -85,7 +89,15 @@ public class Protocol {
     public static final String CALL_ANSWER = "CALL_ANSWER";
     public static final String CALL_REJECT = "CALL_REJECT";
     public static final String CALL_END = "CALL_END";
+    // ==================== CALL HISTORY COMMANDS ====================
+    public static final String CALL_HISTORY_GET = "CALL_HISTORY_GET";
+    public static final String CALL_HISTORY_GET_BY_CONV = "CALL_HISTORY_GET_BY_CONV";
+    public static final String CALL_HISTORY_GET_MISSED = "CALL_HISTORY_GET_MISSED";
+    public static final String CALL_HISTORY_DELETE = "CALL_HISTORY_DELETE";
+    public static final String CALL_HISTORY_CLEAR = "CALL_HISTORY_CLEAR";
+    public static final String CALL_HISTORY_STATS = "CALL_HISTORY_STATS";
 
+    public static final String MESSAGE_DELETE_ALL = "MESSAGE_DELETE_ALL";
     // Call events
     public static final String CALL_INCOMING = "CALL_INCOMING";
     public static final String CALL_ANSWERED = "CALL_ANSWERED";

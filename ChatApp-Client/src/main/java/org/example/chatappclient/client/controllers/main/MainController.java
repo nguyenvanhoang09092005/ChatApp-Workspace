@@ -11,6 +11,7 @@ import javafx.scene.shape.Circle;
 import org.example.chatappclient.client.controllers.main.handlers.*;
 import org.example.chatappclient.client.models.*;
 import org.example.chatappclient.client.services.*;
+import org.example.chatappclient.client.utils.ui.ConversationInfoBuilder;
 import org.example.chatappclient.client.utils.ui.EmojiStickerDialog;
 import org.example.chatappclient.client.utils.data.StickerData;
 
@@ -419,7 +420,10 @@ public class MainController {
         infoSidebar.getChildren().clear();
         Conversation conv = conversationHandler.getConversation(currentConversationId);
         if (conv != null) {
-            infoSidebar.getChildren().add(uiFactory.createInfoSidebarContent(conv));
+            ConversationInfoBuilder builder = new ConversationInfoBuilder();
+            builder.setMainController(this);
+            ScrollPane content = builder.createInfoSidebarContent(conv);
+            infoSidebar.getChildren().add(content);
         }
     }
 
@@ -547,4 +551,22 @@ public class MainController {
         if (callHandler != null) callHandler.cleanup();
         if (fileHandler != null) fileHandler.cleanup();
     }
+
+    public void onConversationDeleted(String conversationId) {
+        System.out.println("🧹 UI handling deleted conversation: " + conversationId);
+        Platform.runLater(() -> {
+            infoSidebar.setVisible(false);
+            infoSidebar.setManaged(false);
+            infoSidebar.getChildren().clear();
+        });
+
+        chatController.resetChat();
+
+        currentConversationId = null;
+
+        conversationHandler.loadConversations();
+
+        showWelcomeScreen();
+    }
+
 }

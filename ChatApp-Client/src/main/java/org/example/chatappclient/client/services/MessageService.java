@@ -134,6 +134,7 @@ public class MessageService {
         socketClient.sendMessage(request);
     }
 
+
     // ==================== HELPER METHODS ====================
 
     /**
@@ -267,5 +268,16 @@ public class MessageService {
             e.printStackTrace();
             return new ArrayList<>();
         }
+    }
+
+    public void deleteAllMessages(String conversationId) throws Exception {
+        String userId = authService.getCurrentUser().getUserId();
+        String request = Protocol.buildRequest(Protocol.MESSAGE_DELETE_ALL,
+                conversationId, userId);
+
+        String response = socketClient.sendRequest(request, 10000);
+
+        if (response == null) throw new Exception("Server không phản hồi");
+        if (!Protocol.isSuccess(response)) throw new Exception(Protocol.getErrorMessage(response));
     }
 }

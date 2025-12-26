@@ -7,19 +7,19 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.effect.DropShadow;
-import javafx.scene.effect.GaussianBlur;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
 
 /**
- * Modern Audio Call Dialog - Hoàn chỉnh với PNG Icons
+ * Desktop Landscape Audio Call Dialog
+ * Giao diện ngang hiện đại với title bar và gradient đẹp mắt
+ * FIXED VERSION: Loa BẬT mặc định + đồng bộ UI/Logic
  */
 public class AudioCallDialog {
 
@@ -30,10 +30,11 @@ public class AudioCallDialog {
     private Button speakerBtn;
     private Button endCallBtn;
     private ImageView avatarView;
-    private StackPane waveformContainer;
+    private double xOffset = 0;
+    private double yOffset = 0;
 
     private boolean isMuted = false;
-    private boolean isSpeakerOn = false;
+    private boolean isSpeakerOn = true; // ✅ FIX: MẶC ĐỊNH BẬT LOA (thay vì false)
     private Timeline callTimer;
     private int seconds = 0;
 
@@ -41,7 +42,6 @@ public class AudioCallDialog {
     private Runnable onSpeakerToggle;
     private Runnable onEndCall;
 
-    // ICON PATHS - Sử dụng PNG icons
     private static final String ICON_MIC_ON = "/icons/mic_on.png";
     private static final String ICON_MIC_OFF = "/icons/mic_off.png";
     private static final String ICON_SPEAKER_ON = "/icons/speaker_on.png";
@@ -55,138 +55,193 @@ public class AudioCallDialog {
     private void createDialog(String partnerName, String avatarUrl) {
         stage = new Stage();
         stage.initStyle(StageStyle.TRANSPARENT);
-        stage.initModality(Modality.NONE);
+        stage.setAlwaysOnTop(true);
 
-        // Main container
-        StackPane root = new StackPane();
-        root.setPrefSize(420, 680);
-
-        // Background gradient với blur
-        VBox background = createGradientBackground();
-
-        // Content container
-        VBox content = new VBox(30);
-        content.setAlignment(Pos.CENTER);
-        content.setPadding(new Insets(50, 40, 40, 40));
-
-        // Header với close button
-        HBox header = createHeader();
-
-        // Avatar với animated waveform
-        StackPane avatarSection = createAvatarSection(avatarUrl);
-
-        // User info
-        VBox userInfo = new VBox(8);
-        userInfo.setAlignment(Pos.CENTER);
-
-        Label nameLabel = new Label(partnerName);
-        nameLabel.setStyle("""
-            -fx-font-size: 28px;
-            -fx-font-weight: 700;
-            -fx-text-fill: white;
-            -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 5, 0, 0, 2);
+        BorderPane root = new BorderPane();
+        root.setPrefSize(720, 480);
+        root.setStyle("""
+            -fx-background-color: #ffffff;
+            -fx-background-radius: 15;
+            -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 35, 0, 0, 12);
             """);
 
-        statusLabel = new Label("Đang kết nối...");
-        statusLabel.setStyle("""
-            -fx-font-size: 16px;
-            -fx-text-fill: rgba(255, 255, 255, 0.85);
-            """);
+        // Title Bar
+        HBox titleBar = createTitleBar();
+        root.setTop(titleBar);
 
-        durationLabel = new Label("00:00");
-        durationLabel.setStyle("""
-            -fx-font-size: 18px;
-            -fx-font-weight: 600;
-            -fx-text-fill: white;
-            """);
-        durationLabel.setVisible(false);
-
-        userInfo.getChildren().addAll(nameLabel, statusLabel, durationLabel);
-
-        // Spacer
-        Region spacer = new Region();
-        VBox.setVgrow(spacer, Priority.ALWAYS);
-
-        // Call controls
-        HBox controls = createControlButtons();
-
-        content.getChildren().addAll(
-                header,
-                avatarSection,
-                userInfo,
-                spacer,
-                controls
-        );
-
-        root.getChildren().addAll(background, content);
+        // Main Content - Split layout
+        HBox mainContent = createMainContent(partnerName, avatarUrl);
+        root.setCenter(mainContent);
 
         Scene scene = new Scene(root);
         scene.setFill(Color.TRANSPARENT);
         stage.setScene(scene);
 
-        // Make draggable
-        makeDraggable(root);
-
-        // Entrance animation
+        setupWindowDragging(titleBar);
         playEntranceAnimation(root);
     }
 
-    // ==================== GRADIENT BACKGROUND ====================
-    private VBox createGradientBackground() {
-        VBox bg = new VBox();
-        bg.setStyle("""
-            -fx-background-color: linear-gradient(135deg, 
-                #667eea 0%, 
-                #764ba2 50%, 
-                #f093fb 100%);
-            -fx-background-radius: 30;
-            -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 30, 0, 0, 10);
+    // ==================== TITLE BAR ====================
+    private HBox createTitleBar() {
+        HBox titleBar = new HBox();
+        titleBar.setPrefHeight(50);
+        titleBar.setAlignment(Pos.CENTER_LEFT);
+        titleBar.setStyle("""
+            -fx-background-color: linear-gradient(to right, #667eea, #764ba2);
+            -fx-background-radius: 15 15 0 0;
+            -fx-padding: 0 20 0 25;
             """);
 
-        return bg;
-    }
+        // Icon + Title
+        HBox leftSection = new HBox(12);
+        leftSection.setAlignment(Pos.CENTER_LEFT);
 
-    // ==================== HEADER ====================
-    private HBox createHeader() {
-        HBox header = new HBox();
-        header.setAlignment(Pos.CENTER_RIGHT);
+        Label icon = new Label("📞");
+        icon.setStyle("-fx-font-size: 20px;");
 
-        Button closeBtn = new Button("✕");
-        closeBtn.setStyle("""
-            -fx-background-color: rgba(255,255,255,0.2);
+        Label title = new Label("Cuộc gọi thoại");
+        title.setStyle("""
             -fx-text-fill: white;
-            -fx-font-size: 18px;
-            -fx-font-weight: bold;
-            -fx-pref-width: 36;
-            -fx-pref-height: 36;
-            -fx-background-radius: 18;
-            -fx-cursor: hand;
-            -fx-border-color: rgba(255,255,255,0.3);
-            -fx-border-radius: 18;
-            -fx-border-width: 1;
+            -fx-font-size: 15px;
+            -fx-font-weight: 600;
             """);
 
-        closeBtn.setOnAction(e -> endCall());
+        leftSection.getChildren().addAll(icon, title);
 
-        // Hover effect
-        closeBtn.setOnMouseEntered(e ->
-                closeBtn.setStyle(closeBtn.getStyle() + "-fx-background-color: rgba(255,255,255,0.3);"));
-        closeBtn.setOnMouseExited(e ->
-                closeBtn.setStyle(closeBtn.getStyle() + "-fx-background-color: rgba(255,255,255,0.2);"));
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        header.getChildren().add(closeBtn);
-        return header;
+        // Window Controls
+        HBox windowControls = createWindowControls();
+
+        titleBar.getChildren().addAll(leftSection, spacer, windowControls);
+        return titleBar;
     }
 
-    // ==================== AVATAR SECTION ====================
+    private HBox createWindowControls() {
+        HBox controls = new HBox(5);
+        controls.setAlignment(Pos.CENTER_RIGHT);
+
+        // Minimize
+        StackPane minBtn = createControlButton("—", "#667eea");
+        minBtn.setOnMouseClicked(e -> stage.setIconified(true));
+
+        // Maximize (disabled)
+        StackPane maxBtn = createControlButton("□", "#667eea");
+        maxBtn.setOpacity(0.5);
+
+        // Close
+        StackPane closeBtn = createControlButton("✕", "#e53e3e");
+        closeBtn.setOnMouseClicked(e -> endCall());
+
+        controls.getChildren().addAll(minBtn, maxBtn, closeBtn);
+        return controls;
+    }
+
+    private StackPane createControlButton(String symbol, String hoverColor) {
+        StackPane btn = new StackPane();
+        btn.setPrefSize(38, 35);
+        btn.setStyle("""
+            -fx-background-color: transparent;
+            -fx-background-radius: 6;
+            -fx-cursor: hand;
+            """);
+
+        Label label = new Label(symbol);
+        label.setStyle("""
+            -fx-text-fill: white;
+            -fx-font-size: 17px;
+            -fx-font-weight: bold;
+            """);
+
+        btn.getChildren().add(label);
+
+        btn.setOnMouseEntered(e ->
+                btn.setStyle("-fx-background-color: " + hoverColor + "; -fx-background-radius: 6; -fx-cursor: hand;")
+        );
+
+        btn.setOnMouseExited(e ->
+                btn.setStyle("-fx-background-color: transparent; -fx-background-radius: 6; -fx-cursor: hand;")
+        );
+
+        return btn;
+    }
+
+    // ==================== MAIN CONTENT ====================
+    private HBox createMainContent(String partnerName, String avatarUrl) {
+        HBox content = new HBox(0);
+        content.setStyle("-fx-background-color: #ffffff; -fx-background-radius: 0 0 15 15;");
+
+        // Left Panel - Gradient với avatar
+        VBox leftPanel = createLeftPanel(avatarUrl);
+        leftPanel.setPrefWidth(320);
+
+        // Right Panel - Controls
+        VBox rightPanel = createRightPanel(partnerName);
+        HBox.setHgrow(rightPanel, Priority.ALWAYS);
+
+        content.getChildren().addAll(leftPanel, rightPanel);
+        return content;
+    }
+
+    // ==================== LEFT PANEL ====================
+    private VBox createLeftPanel(String avatarUrl) {
+        VBox panel = new VBox();
+        panel.setAlignment(Pos.CENTER);
+        panel.setStyle("""
+            -fx-background-color: linear-gradient(to bottom, #667eea, #764ba2);
+            -fx-background-radius: 0 0 0 15;
+            -fx-padding: 40;
+            """);
+
+        // Avatar với animated rings
+        StackPane avatarSection = createAvatarSection(avatarUrl);
+
+        // Call duration
+        durationLabel = new Label("00:00");
+        durationLabel.setStyle("""
+            -fx-font-size: 36px;
+            -fx-font-weight: 700;
+            -fx-text-fill: white;
+            -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 8, 0, 0, 3);
+            -fx-padding: 25 0 0 0;
+            """);
+        durationLabel.setVisible(false);
+
+        panel.getChildren().addAll(avatarSection, durationLabel);
+        return panel;
+    }
+
     private StackPane createAvatarSection(String avatarUrl) {
         StackPane container = new StackPane();
         container.setPrefSize(200, 200);
 
-        // Animated waveform background
-        waveformContainer = createWaveform();
+        // Animated pulse rings
+        for (int i = 0; i < 3; i++) {
+            Circle ring = new Circle(100 + i * 15);
+            ring.setFill(Color.TRANSPARENT);
+            ring.setStroke(Color.rgb(255, 255, 255, 0.25 - i * 0.05));
+            ring.setStrokeWidth(2.5);
 
-        // Avatar circle
+            ScaleTransition scale = new ScaleTransition(Duration.seconds(2.5), ring);
+            scale.setFromX(1.0);
+            scale.setFromY(1.0);
+            scale.setToX(1.5);
+            scale.setToY(1.5);
+            scale.setDelay(Duration.seconds(i * 0.8));
+            scale.setCycleCount(Timeline.INDEFINITE);
+
+            FadeTransition fade = new FadeTransition(Duration.seconds(2.5), ring);
+            fade.setFromValue(0.4);
+            fade.setToValue(0.0);
+            fade.setDelay(Duration.seconds(i * 0.8));
+            fade.setCycleCount(Timeline.INDEFINITE);
+
+            new ParallelTransition(scale, fade).play();
+            container.getChildren().add(ring);
+        }
+
+        // Avatar
         Circle avatarClip = new Circle(85);
 
         avatarView = new ImageView();
@@ -205,120 +260,176 @@ public class AudioCallDialog {
             avatarView.setImage(createDefaultAvatar());
         }
 
-        // White border with shadow
+        // White border
         Circle border = new Circle(85);
         border.setFill(Color.TRANSPARENT);
         border.setStroke(Color.WHITE);
         border.setStrokeWidth(5);
 
-        DropShadow borderShadow = new DropShadow();
-        borderShadow.setRadius(30);
-        borderShadow.setColor(Color.rgb(0, 0, 0, 0.5));
-        border.setEffect(borderShadow);
+        DropShadow shadow = new DropShadow();
+        shadow.setRadius(30);
+        shadow.setColor(Color.rgb(0, 0, 0, 0.4));
+        border.setEffect(shadow);
 
-        container.getChildren().addAll(waveformContainer, avatarView, border);
-
-        return container;
-    }
-
-    // ==================== WAVEFORM ANIMATION ====================
-    private StackPane createWaveform() {
-        StackPane container = new StackPane();
-
-        // Create 3 concentric circles
-        for (int i = 0; i < 3; i++) {
-            Circle wave = new Circle(100 + i * 20);
-            wave.setFill(Color.TRANSPARENT);
-            wave.setStroke(Color.rgb(255, 255, 255, 0.3));
-            wave.setStrokeWidth(2);
-
-            // Scale animation
-            ScaleTransition scale = new ScaleTransition(Duration.seconds(2 + i * 0.3), wave);
-            scale.setFromX(1.0);
-            scale.setFromY(1.0);
-            scale.setToX(1.5);
-            scale.setToY(1.5);
-            scale.setDelay(Duration.seconds(i * 0.7));
-            scale.setCycleCount(Timeline.INDEFINITE);
-
-            // Fade animation
-            FadeTransition fade = new FadeTransition(Duration.seconds(2 + i * 0.3), wave);
-            fade.setFromValue(0.4);
-            fade.setToValue(0.0);
-            fade.setDelay(Duration.seconds(i * 0.7));
-            fade.setCycleCount(Timeline.INDEFINITE);
-
-            new ParallelTransition(scale, fade).play();
-
-            container.getChildren().add(wave);
-        }
-
+        container.getChildren().addAll(avatarView, border);
         return container;
     }
 
     private Image createDefaultAvatar() {
-        return new Image("https://ui-avatars.com/api/?name=User&size=170&background=fff&color=667eea&bold=true");
+        return new Image("https://ui-avatars.com/api/?name=User&size=170&background=667eea&color=fff");
     }
 
-    // ==================== CONTROL BUTTONS ====================
-    private HBox createControlButtons() {
-        HBox controls = new HBox(25);
-        controls.setAlignment(Pos.CENTER);
+    // ==================== RIGHT PANEL ====================
+    private VBox createRightPanel(String partnerName) {
+        VBox panel = new VBox(30);
+        panel.setAlignment(Pos.CENTER);
+        panel.setPadding(new Insets(50, 40, 50, 40));
+        panel.setStyle("-fx-background-color: #ffffff; -fx-background-radius: 0 0 15 0;");
 
-        // Mute button
-        muteBtn = createIconButton(ICON_MIC_ON, "#4CAF50", 70);
-        muteBtn.setOnAction(e -> toggleMute());
+        // Partner info
+        VBox infoSection = new VBox(12);
+        infoSection.setAlignment(Pos.CENTER);
 
-        // Speaker button
-        speakerBtn = createIconButton(ICON_SPEAKER_OFF, "#2196F3", 70);
-        speakerBtn.setOnAction(e -> toggleSpeaker());
+        Label nameLabel = new Label(partnerName);
+        nameLabel.setStyle("""
+            -fx-font-size: 32px;
+            -fx-font-weight: 700;
+            -fx-text-fill: #2d3748;
+            """);
 
-        // End call button (larger, red)
-        endCallBtn = createIconButton(ICON_HANG_UP, "#FF3B30", 80);
-        endCallBtn.setOnAction(e -> endCall());
+        statusLabel = new Label("Đang kết nối...");
+        statusLabel.setStyle("""
+            -fx-font-size: 17px;
+            -fx-text-fill: #718096;
+            -fx-font-weight: 500;
+            """);
 
-        controls.getChildren().addAll(muteBtn, speakerBtn, endCallBtn);
-        return controls;
+        // Blinking animation
+        FadeTransition blink = new FadeTransition(Duration.seconds(1.2), statusLabel);
+        blink.setFromValue(1.0);
+        blink.setToValue(0.5);
+        blink.setCycleCount(Timeline.INDEFINITE);
+        blink.setAutoReverse(true);
+        blink.play();
+
+        infoSection.getChildren().addAll(nameLabel, statusLabel);
+
+        // Call quality indicator
+        HBox qualityBox = createQualityIndicator();
+
+        // Spacer
+        Region spacer = new Region();
+        VBox.setVgrow(spacer, Priority.ALWAYS);
+
+        // Control buttons
+        VBox controlsSection = createControlsSection();
+
+        panel.getChildren().addAll(infoSection, qualityBox, spacer, controlsSection);
+        return panel;
     }
 
-    /**
-     * Tạo button với icon PNG
-     */
-    private Button createIconButton(String iconPath, String color, int size) {
-        Button btn = new Button();
+    private HBox createQualityIndicator() {
+        HBox quality = new HBox(8);
+        quality.setAlignment(Pos.CENTER);
+        quality.setStyle("""
+            -fx-background-color: #f7fafc;
+            -fx-background-radius: 20;
+            -fx-padding: 12 20 12 20;
+            """);
 
-        // Load và set icon
-        try {
-            ImageView icon = new ImageView(new Image(getClass().getResourceAsStream(iconPath)));
-            icon.setFitWidth(size * 0.45);
-            icon.setFitHeight(size * 0.45);
-            icon.setPreserveRatio(true);
-            icon.setSmooth(true);
-            btn.setGraphic(icon);
-        } catch (Exception e) {
-            System.err.println("⚠️ Không thể load icon: " + iconPath);
-            btn.setText("?");
+        // Signal bars
+        HBox bars = new HBox(3);
+        bars.setAlignment(Pos.CENTER);
+        for (int i = 0; i < 4; i++) {
+            VBox bar = new VBox();
+            bar.setPrefWidth(4);
+            bar.setPrefHeight(8 + i * 4);
+            bar.setStyle("-fx-background-color: #4CAF50; -fx-background-radius: 2;");
+            bars.getChildren().add(bar);
         }
 
-        btn.setPrefSize(size, size);
+        Label qualityLabel = new Label("Chất lượng tốt");
+        qualityLabel.setStyle("""
+            -fx-font-size: 14px;
+            -fx-text-fill: #4a5568;
+            -fx-font-weight: 500;
+            """);
+
+        quality.getChildren().addAll(bars, qualityLabel);
+        return quality;
+    }
+
+    // ==================== CONTROLS SECTION ====================
+    private VBox createControlsSection() {
+        VBox section = new VBox(25);
+        section.setAlignment(Pos.CENTER);
+
+        // Mute & Speaker buttons
+        HBox auxButtons = new HBox(20);
+        auxButtons.setAlignment(Pos.CENTER);
+
+        muteBtn = createControlButton(ICON_MIC_ON, "Tắt tiếng", "#4CAF50", false);
+        muteBtn.setOnAction(e -> toggleMute());
+
+        // ✅ FIX: Khởi tạo với LOA BẬT (SPEAKER_ON + màu XANH + label "Tắt loa")
+        speakerBtn = createControlButton(ICON_SPEAKER_ON, "Tắt loa", "#2196F3", false);
+        speakerBtn.setOnAction(e -> toggleSpeaker());
+
+        auxButtons.getChildren().addAll(muteBtn, speakerBtn);
+
+        // End call button (prominent)
+        endCallBtn = createEndCallButton();
+        endCallBtn.setOnAction(e -> endCall());
+
+        section.getChildren().addAll(auxButtons, endCallBtn);
+        return section;
+    }
+
+    private Button createControlButton(String iconPath, String tooltip, String color, boolean isEndCall) {
+        Button btn = new Button();
+
+        VBox content = new VBox(8);
+        content.setAlignment(Pos.CENTER);
+
+        // Icon
+        try {
+            ImageView icon = new ImageView(new Image(getClass().getResourceAsStream(iconPath)));
+            icon.setFitWidth(28);
+            icon.setFitHeight(28);
+            icon.setPreserveRatio(true);
+            icon.setSmooth(true);
+            content.getChildren().add(icon);
+        } catch (Exception e) {
+            Label fallback = new Label("?");
+            fallback.setStyle("-fx-font-size: 24px; -fx-text-fill: white;");
+            content.getChildren().add(fallback);
+        }
+
+        // Label
+        Label label = new Label(tooltip);
+        label.setStyle("""
+            -fx-text-fill: white;
+            -fx-font-size: 12px;
+            -fx-font-weight: 600;
+            """);
+        content.getChildren().add(label);
+
+        btn.setGraphic(content);
+        btn.setPrefSize(110, 90);
         btn.setStyle(String.format("""
             -fx-background-color: %s;
-            -fx-background-radius: %d;
+            -fx-background-radius: 12;
             -fx-cursor: hand;
-            -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 15, 0, 0, 5);
-            -fx-border-color: rgba(255,255,255,0.2);
-            -fx-border-width: 2;
-            -fx-border-radius: %d;
-            """, color, size/2, size/2));
+            -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 12, 0, 0, 4);
+            -fx-border-color: transparent;
+            """, color));
 
-        // Hover animation
+        // Hover
         btn.setOnMouseEntered(e -> {
             ScaleTransition scale = new ScaleTransition(Duration.millis(150), btn);
-            scale.setToX(1.1);
-            scale.setToY(1.1);
+            scale.setToX(1.05);
+            scale.setToY(1.05);
             scale.play();
-
-            btn.setStyle(btn.getStyle() + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 20, 0, 0, 8);");
         });
 
         btn.setOnMouseExited(e -> {
@@ -326,22 +437,72 @@ public class AudioCallDialog {
             scale.setToX(1.0);
             scale.setToY(1.0);
             scale.play();
-
-            btn.setStyle(btn.getStyle() + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 15, 0, 0, 5);");
         });
 
-        // Press animation
-        btn.setOnMousePressed(e -> {
-            ScaleTransition scale = new ScaleTransition(Duration.millis(100), btn);
-            scale.setToX(0.95);
-            scale.setToY(0.95);
+        return btn;
+    }
+
+    private Button createEndCallButton() {
+        Button btn = new Button();
+
+        HBox content = new HBox(12);
+        content.setAlignment(Pos.CENTER);
+
+        // Icon
+        try {
+            ImageView icon = new ImageView(new Image(getClass().getResourceAsStream(ICON_HANG_UP)));
+            icon.setFitWidth(32);
+            icon.setFitHeight(32);
+            icon.setPreserveRatio(true);
+            icon.setSmooth(true);
+            content.getChildren().add(icon);
+        } catch (Exception e) {
+            Label fallback = new Label("✕");
+            fallback.setStyle("-fx-font-size: 28px; -fx-text-fill: white;");
+            content.getChildren().add(fallback);
+        }
+
+        Label label = new Label("Kết thúc");
+        label.setStyle("""
+            -fx-text-fill: white;
+            -fx-font-size: 16px;
+            -fx-font-weight: 700;
+            """);
+        content.getChildren().add(label);
+
+        btn.setGraphic(content);
+        btn.setPrefSize(240, 60);
+        btn.setStyle("""
+            -fx-background-color: #e53e3e;
+            -fx-background-radius: 30;
+            -fx-cursor: hand;
+            -fx-effect: dropshadow(gaussian, rgba(229,62,62,0.4), 15, 0, 0, 6);
+            """);
+
+        // Hover
+        btn.setOnMouseEntered(e -> {
+            btn.setStyle("""
+                -fx-background-color: #dc2626;
+                -fx-background-radius: 30;
+                -fx-cursor: hand;
+                -fx-effect: dropshadow(gaussian, rgba(229,62,62,0.5), 18, 0, 0, 8);
+                """);
+            ScaleTransition scale = new ScaleTransition(Duration.millis(150), btn);
+            scale.setToX(1.05);
+            scale.setToY(1.05);
             scale.play();
         });
 
-        btn.setOnMouseReleased(e -> {
-            ScaleTransition scale = new ScaleTransition(Duration.millis(100), btn);
-            scale.setToX(1.1);
-            scale.setToY(1.1);
+        btn.setOnMouseExited(e -> {
+            btn.setStyle("""
+                -fx-background-color: #e53e3e;
+                -fx-background-radius: 30;
+                -fx-cursor: hand;
+                -fx-effect: dropshadow(gaussian, rgba(229,62,62,0.4), 15, 0, 0, 6);
+                """);
+            ScaleTransition scale = new ScaleTransition(Duration.millis(150), btn);
+            scale.setToX(1.0);
+            scale.setToY(1.0);
             scale.play();
         });
 
@@ -352,61 +513,73 @@ public class AudioCallDialog {
     private void toggleMute() {
         isMuted = !isMuted;
 
-        // Đổi icon
+        // Cập nhật UI
+        VBox content = (VBox) muteBtn.getGraphic();
+        ImageView iconView = (ImageView) content.getChildren().get(0);
+        Label labelView = (Label) content.getChildren().get(1);
+
         String newIcon = isMuted ? ICON_MIC_OFF : ICON_MIC_ON;
         String newColor = isMuted ? "#757575" : "#4CAF50";
+        String newLabel = isMuted ? "Bật tiếng" : "Tắt tiếng";
 
         try {
-            ImageView icon = new ImageView(new Image(getClass().getResourceAsStream(newIcon)));
-            icon.setFitWidth(31.5);
-            icon.setFitHeight(31.5);
-            icon.setPreserveRatio(true);
-            icon.setSmooth(true);
-            muteBtn.setGraphic(icon);
+            iconView.setImage(new Image(getClass().getResourceAsStream(newIcon)));
         } catch (Exception e) {
             System.err.println("⚠️ Không thể load icon: " + newIcon);
         }
 
-        // Đổi màu nền
+        labelView.setText(newLabel);
         muteBtn.setStyle(String.format("""
-            -fx-background-color: %s;
-            -fx-background-radius: 35;
-            -fx-cursor: hand;
-            -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 15, 0, 0, 5);
-            -fx-border-color: rgba(255,255,255,0.2);
-            -fx-border-width: 2;
-            -fx-border-radius: 35;
-            """, newColor));
+        -fx-background-color: %s;
+        -fx-background-radius: 12;
+        -fx-cursor: hand;
+        -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 12, 0, 0, 4);
+        """, newColor));
 
+        // ✅ Gọi callback SAU KHI đã cập nhật UI
         if (onMuteToggle != null) {
             onMuteToggle.run();
         }
-
-        System.out.println(isMuted ? "🔇 Đã TẮT tiếng" : "🔊 Đã BẬT tiếng");
     }
 
     private void toggleSpeaker() {
         isSpeakerOn = !isSpeakerOn;
 
-        // Đổi icon
+        VBox content = (VBox) speakerBtn.getGraphic();
+        ImageView iconView = (ImageView) content.getChildren().get(0);
+        Label labelView = (Label) content.getChildren().get(1);
+
+        // ✅ FIX: Logic đảo ngược đúng
+        // Khi isSpeakerOn = true  → Icon BẬT,  màu XANH, label "Tắt loa"
+        // Khi isSpeakerOn = false → Icon TẮT, màu XÁM,  label "Bật loa"
         String newIcon = isSpeakerOn ? ICON_SPEAKER_ON : ICON_SPEAKER_OFF;
+        String newLabel = isSpeakerOn ? "Tắt loa" : "Bật loa";
+        String newColor = isSpeakerOn ? "#2196F3" : "#757575";
 
         try {
-            ImageView icon = new ImageView(new Image(getClass().getResourceAsStream(newIcon)));
-            icon.setFitWidth(31.5);
-            icon.setFitHeight(31.5);
-            icon.setPreserveRatio(true);
-            icon.setSmooth(true);
-            speakerBtn.setGraphic(icon);
+            iconView.setImage(new Image(getClass().getResourceAsStream(newIcon)));
         } catch (Exception e) {
             System.err.println("⚠️ Không thể load icon: " + newIcon);
         }
 
+        labelView.setText(newLabel);
+
+        // ✅ Cập nhật màu button
+        speakerBtn.setStyle(String.format("""
+        -fx-background-color: %s;
+        -fx-background-radius: 12;
+        -fx-cursor: hand;
+        -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 12, 0, 0, 4);
+        -fx-border-color: transparent;
+        """, newColor));
+
+        // ✅ Gọi callback để thực sự tắt/bật loa
         if (onSpeakerToggle != null) {
             onSpeakerToggle.run();
         }
 
-        System.out.println(isSpeakerOn ? "🔊 Loa ngoài BẬT" : "🔈 Loa ngoài TẮT");
+        // ✅ THÊM LOG ĐỂ DEBUG
+        System.out.println(isSpeakerOn ? "🔊 Đã bật loa" : "🔇 Đã tắt loa");
     }
 
     private void endCall() {
@@ -422,10 +595,23 @@ public class AudioCallDialog {
         });
     }
 
+    // ==================== WINDOW DRAGGING ====================
+    private void setupWindowDragging(HBox titleBar) {
+        titleBar.setOnMousePressed(e -> {
+            xOffset = e.getSceneX();
+            yOffset = e.getSceneY();
+        });
+
+        titleBar.setOnMouseDragged(e -> {
+            stage.setX(e.getScreenX() - xOffset);
+            stage.setY(e.getScreenY() - yOffset);
+        });
+    }
+
     // ==================== ANIMATIONS ====================
-    private void playEntranceAnimation(StackPane root) {
-        root.setScaleX(0.8);
-        root.setScaleY(0.8);
+    private void playEntranceAnimation(BorderPane root) {
+        root.setScaleX(0.85);
+        root.setScaleY(0.85);
         root.setOpacity(0);
 
         ScaleTransition scale = new ScaleTransition(Duration.millis(400), root);
@@ -440,34 +626,18 @@ public class AudioCallDialog {
     }
 
     private void playExitAnimation(Runnable onComplete) {
-        StackPane root = (StackPane) stage.getScene().getRoot();
+        BorderPane root = (BorderPane) stage.getScene().getRoot();
 
-        ScaleTransition scale = new ScaleTransition(Duration.millis(300), root);
-        scale.setToX(0.8);
-        scale.setToY(0.8);
+        ScaleTransition scale = new ScaleTransition(Duration.millis(250), root);
+        scale.setToX(0.9);
+        scale.setToY(0.9);
 
-        FadeTransition fade = new FadeTransition(Duration.millis(300), root);
+        FadeTransition fade = new FadeTransition(Duration.millis(250), root);
         fade.setToValue(0);
 
         ParallelTransition exit = new ParallelTransition(scale, fade);
         exit.setOnFinished(e -> onComplete.run());
         exit.play();
-    }
-
-    // ==================== DRAGGABLE ====================
-    private void makeDraggable(StackPane root) {
-        final double[] xOffset = {0};
-        final double[] yOffset = {0};
-
-        root.setOnMousePressed(event -> {
-            xOffset[0] = event.getSceneX();
-            yOffset[0] = event.getSceneY();
-        });
-
-        root.setOnMouseDragged(event -> {
-            stage.setX(event.getScreenX() - xOffset[0]);
-            stage.setY(event.getScreenY() - yOffset[0]);
-        });
     }
 
     // ==================== PUBLIC METHODS ====================
@@ -484,18 +654,14 @@ public class AudioCallDialog {
         statusLabel.setText("Đang trò chuyện");
         durationLabel.setVisible(true);
         startCallTimer();
+
+        // ✅ THÊM: Debug log
+        System.out.println("✅ AudioCallDialog: Cuộc gọi đã connected");
+        System.out.println("   Trạng thái loa: " + (isSpeakerOn ? "BẬT" : "TẮT"));
     }
 
     public void setRinging() {
         statusLabel.setText("Đang gọi...");
-
-        // Blinking animation
-        FadeTransition blink = new FadeTransition(Duration.seconds(1), statusLabel);
-        blink.setFromValue(1.0);
-        blink.setToValue(0.5);
-        blink.setCycleCount(Timeline.INDEFINITE);
-        blink.setAutoReverse(true);
-        blink.play();
     }
 
     private void startCallTimer() {

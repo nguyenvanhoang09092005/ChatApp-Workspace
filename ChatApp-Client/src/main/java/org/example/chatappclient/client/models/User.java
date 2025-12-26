@@ -19,6 +19,10 @@ public class User implements Serializable {
     private String gender;
     private LocalDate birthday;
     private String status; // online, offline, away, busy
+    private String statusMessage;
+    private boolean isActive;
+    private boolean isVerified;
+
     private boolean isOnline;
     private LocalDateTime lastSeen;
     private LocalDateTime createdAt;
@@ -58,7 +62,32 @@ public class User implements Serializable {
         this.birthday = birthday;
     }
 
+    public String getStatusMessage() {
+        return statusMessage;
+    }
 
+    public boolean isActive() {
+        return isActive;
+    }
+
+    public boolean isVerified() {
+        return isVerified;
+    }
+
+    public void setStatusMessage(String statusMessage) {
+        this.statusMessage = statusMessage;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setActive(boolean active) {
+        isActive = active;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setVerified(boolean verified) {
+        isVerified = verified;
+        this.updatedAt = LocalDateTime.now();
+    }
     public String getUserId() { return userId; }
     public String getUsername() { return username; }
     public String getEmail() { return email; }
@@ -205,6 +234,4 @@ public class User implements Serializable {
         return Objects.hash(userId);
     }
 
-    public void setStatusMessage(String field) {
-    }
 }

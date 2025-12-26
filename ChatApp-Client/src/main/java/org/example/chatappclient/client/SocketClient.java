@@ -2,6 +2,7 @@ package org.example.chatappclient.client;
 
 import org.example.chatappclient.client.config.AppConfig;
 import org.example.chatappclient.client.protocol.Protocol;
+import org.example.chatappclient.client.services.ConversationService;
 import org.example.chatappclient.client.utils.network.ZeroTierHelper;
 
 import java.io.*;
@@ -234,6 +235,12 @@ public class SocketClient {
             if (msgHandler != null) {
                 msgHandler.accept(message);
             }
+            return;
+        }
+
+        if (Protocol.CONVERSATION_RESTORED.equals(command)) {
+            System.out.println("→ Processing CONVERSATION_RESTORED");
+            ConversationService.getInstance().handleConversationRestored(message);
             return;
         }
 

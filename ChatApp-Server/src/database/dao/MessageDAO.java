@@ -1,6 +1,7 @@
 package database.dao;
 
 import database.connection.DBConnection;
+import models.Conversation;
 import models.Message;
 
 import java.sql.*;
@@ -9,8 +10,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Data Access Object for Message table
- * Handles all database operations related to messages
+ * ✅ FIXED: Proper deletion filtering per user
+ * - User A deletes → Only A loses old messages
+ * - User B keeps all messages
+ * - When A sends new message → Conversation reappears for A with only new messages
  */
 public class MessageDAO {
 
@@ -18,6 +21,7 @@ public class MessageDAO {
 
     /**
      * Create new message
+     * ✅ Auto-restore conversation for user who had deleted it
      */
     public static boolean createMessage(Message message) {
         String sql = "INSERT INTO messages (message_id, conversation_id, sender_id, " +
@@ -49,8 +53,30 @@ public class MessageDAO {
             ps.setString(18, message.getReplyToMessageId());
 
             int result = ps.executeUpdate();
-            System.out.println("✅ Message created: " + message.getMessageId() +
-                    " (rows affected: " + result + ")");
+            System.out.println("✅ Message created: " + message.getMessageId());
+
+            Conversation conv = ConversationDAO.findById(message.getConversationId());
+            if (conv != null) {
+                for (String memberId : conv.getMemberIds()) {
+                    if (!memberId.equals(message.getSenderId())) {
+                        boolean wasDeleted = ConversationDeletionDAO.isConversationDeletedByUser(
+                                message.getConversationId(), memberId);
+
+                        if (wasDeleted) {
+                            // Remove deletion record → conversation reappears for this user
+                            ConversationDeletionDAO.restoreConversationForUser(
+                                    message.getConversationId(), memberId);
+                            System.out.println("✅ Auto-restored conversation for user: " + memberId);
+                        }
+                    }
+                }
+            }
+
+            // Update sender's deletion timestamp (if they had deleted before)
+            ConversationDeletionDAO.updateDeletionTimestampToNow(
+                    message.getConversationId(),
+                    message.getSenderId()
+            );
 
             // Update conversation last message
             ConversationDAO.updateLastMessage(message.getConversationId(),
@@ -91,45 +117,101 @@ public class MessageDAO {
     }
 
     /**
-     * Get messages for conversation
+     * ✅ CORRECT: Get messages for specific user with deletion filtering
+     * - User who deleted: See only messages AFTER deletion timestamp
+     * - User who didn't delete: See ALL messages
      */
-    public static List<Message> getConversationMessages(String conversationId, int limit) {
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? " +
-                "ORDER BY timestamp DESC LIMIT ?";
+    public static List<Message> getMessagesForUser(String conversationId, String userId) {
+        LocalDateTime deletedAt = ConversationDeletionDAO.getDeletionTimestamp(conversationId, userId);
+
+        // 🔍 DEBUG LOG
+        System.out.println("\n🔍 === GET MESSAGES DEBUG ===");
+        System.out.println("  ConversationID: " + conversationId);
+        System.out.println("  UserID: " + userId);
+        System.out.println("  DeletedAt: " + deletedAt);
+
+        String sql;
+        if (deletedAt != null) {
+            // User deleted conversation - only show messages AFTER deletion
+            sql = "SELECT * FROM messages " +
+                    "WHERE conversation_id = ? " +
+                    "AND timestamp > ? " +
+                    "ORDER BY timestamp ASC";
+            System.out.println("  ⚠️ User deleted conversation - filtering messages after: " + deletedAt);
+        } else {
+            // User never deleted - show all messages
+            sql = "SELECT * FROM messages " +
+                    "WHERE conversation_id = ? " +
+                    "ORDER BY timestamp ASC";
+            System.out.println("  ✅ User never deleted - showing ALL messages");
+        }
+
         List<Message> messages = new ArrayList<>();
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, conversationId);
-            ps.setInt(2, limit);
+            if (deletedAt != null) {
+                ps.setTimestamp(2, Timestamp.valueOf(deletedAt));
+            }
+
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
                 messages.add(mapResultSetToMessage(rs));
             }
 
+            System.out.println("  📊 Retrieved: " + messages.size() + " messages");
+            System.out.println("🔍 === END DEBUG ===\n");
+
         } catch (SQLException e) {
-            System.err.println("❌ Error getting conversation messages: " + e.getMessage());
+            System.err.println("❌ Error getting messages: " + e.getMessage());
+            e.printStackTrace();
         }
 
         return messages;
     }
 
     /**
-     * Get messages with pagination
+     * ✅ Get paginated messages with deletion filtering
      */
-    public static List<Message> getMessagesPaginated(String conversationId, int offset, int limit) {
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? " +
-                "ORDER BY timestamp DESC LIMIT ? OFFSET ?";
+    public static List<Message> getMessagesPaginatedForUser(String conversationId,
+                                                            int offset,
+                                                            int limit,
+                                                            String userId) {
+        LocalDateTime deletedAt = ConversationDeletionDAO.getDeletionTimestamp(conversationId, userId);
+
+        String sql;
+        if (deletedAt != null) {
+            sql = "SELECT * FROM messages " +
+                    "WHERE conversation_id = ? " +
+                    "AND timestamp > ? " +
+                    "ORDER BY timestamp DESC " +
+                    "LIMIT ? OFFSET ?";
+        } else {
+            sql = "SELECT * FROM messages " +
+                    "WHERE conversation_id = ? " +
+                    "ORDER BY timestamp DESC " +
+                    "LIMIT ? OFFSET ?";
+        }
+
         List<Message> messages = new ArrayList<>();
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, conversationId);
-            ps.setInt(2, limit);
-            ps.setInt(3, offset);
+
+            if (deletedAt != null) {
+                ps.setTimestamp(2, Timestamp.valueOf(deletedAt));
+                ps.setInt(3, limit);
+                ps.setInt(4, offset);
+            } else {
+                ps.setInt(2, limit);
+                ps.setInt(3, offset);
+            }
+
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
@@ -138,17 +220,20 @@ public class MessageDAO {
 
         } catch (SQLException e) {
             System.err.println("❌ Error getting paginated messages: " + e.getMessage());
+            e.printStackTrace();
         }
 
         return messages;
     }
 
     /**
-     * Get messages after timestamp
+     * Get messages after specific timestamp
      */
     public static List<Message> getMessagesAfter(String conversationId, LocalDateTime after) {
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? AND timestamp > ? " +
+        String sql = "SELECT * FROM messages " +
+                "WHERE conversation_id = ? AND timestamp > ? " +
                 "ORDER BY timestamp ASC";
+
         List<Message> messages = new ArrayList<>();
 
         try (Connection conn = DBConnection.getConnection();
@@ -170,46 +255,46 @@ public class MessageDAO {
     }
 
     /**
-     * Get unread messages for user in conversation
+     * ✅ Search messages with deletion filtering
      */
-    public static List<Message> getUnreadMessages(String conversationId, String userId) {
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? " +
-                "AND sender_id != ? AND is_read = FALSE ORDER BY timestamp ASC";
-        List<Message> messages = new ArrayList<>();
+    public static List<Message> searchMessages(String conversationId,
+                                               String keyword,
+                                               int limit,
+                                               String userId) {
+        LocalDateTime deletionTime = ConversationDeletionDAO.getDeletionTimestamp(conversationId, userId);
 
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, conversationId);
-            ps.setString(2, userId);
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                messages.add(mapResultSetToMessage(rs));
-            }
-
-        } catch (SQLException e) {
-            System.err.println("❌ Error getting unread messages: " + e.getMessage());
+        String sql;
+        if (deletionTime != null) {
+            sql = "SELECT * FROM messages " +
+                    "WHERE conversation_id = ? " +
+                    "AND timestamp > ? " +
+                    "AND content LIKE ? " +
+                    "AND is_recalled = FALSE " +
+                    "ORDER BY timestamp DESC LIMIT ?";
+        } else {
+            sql = "SELECT * FROM messages " +
+                    "WHERE conversation_id = ? " +
+                    "AND content LIKE ? " +
+                    "AND is_recalled = FALSE " +
+                    "ORDER BY timestamp DESC LIMIT ?";
         }
 
-        return messages;
-    }
-
-    /**
-     * Search messages in conversation
-     */
-    public static List<Message> searchMessages(String conversationId, String keyword, int limit) {
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? " +
-                "AND content LIKE ? AND is_recalled = FALSE " +
-                "ORDER BY timestamp DESC LIMIT ?";
         List<Message> messages = new ArrayList<>();
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, conversationId);
-            ps.setString(2, "%" + keyword + "%");
-            ps.setInt(3, limit);
+
+            if (deletionTime != null) {
+                ps.setTimestamp(2, Timestamp.valueOf(deletionTime));
+                ps.setString(3, "%" + keyword + "%");
+                ps.setInt(4, limit);
+            } else {
+                ps.setString(2, "%" + keyword + "%");
+                ps.setInt(3, limit);
+            }
+
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
@@ -224,12 +309,64 @@ public class MessageDAO {
     }
 
     /**
-     * Get media messages (images, videos, files)
+     * ✅ Get unread messages with deletion filtering
+     */
+    public static List<Message> getUnreadMessages(String conversationId, String userId) {
+        LocalDateTime deletionTime = ConversationDeletionDAO.getDeletionTimestamp(conversationId, userId);
+
+        String sql;
+        if (deletionTime != null) {
+            sql = "SELECT * FROM messages " +
+                    "WHERE conversation_id = ? " +
+                    "AND timestamp > ? " +
+                    "AND sender_id != ? " +
+                    "AND is_read = FALSE " +
+                    "ORDER BY timestamp ASC";
+        } else {
+            sql = "SELECT * FROM messages " +
+                    "WHERE conversation_id = ? " +
+                    "AND sender_id != ? " +
+                    "AND is_read = FALSE " +
+                    "ORDER BY timestamp ASC";
+        }
+
+        List<Message> messages = new ArrayList<>();
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, conversationId);
+
+            if (deletionTime != null) {
+                ps.setTimestamp(2, Timestamp.valueOf(deletionTime));
+                ps.setString(3, userId);
+            } else {
+                ps.setString(2, userId);
+            }
+
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+                messages.add(mapResultSetToMessage(rs));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("❌ Error getting unread messages: " + e.getMessage());
+        }
+
+        return messages;
+    }
+
+    /**
+     * Get media messages (images, files, etc.)
      */
     public static List<Message> getMediaMessages(String conversationId, String messageType) {
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? " +
-                "AND message_type = ? AND is_recalled = FALSE " +
+        String sql = "SELECT * FROM messages " +
+                "WHERE conversation_id = ? " +
+                "AND message_type = ? " +
+                "AND is_recalled = FALSE " +
                 "ORDER BY timestamp DESC";
+
         List<Message> messages = new ArrayList<>();
 
         try (Connection conn = DBConnection.getConnection();
@@ -330,7 +467,7 @@ public class MessageDAO {
     }
 
     /**
-     * Recall message
+     * Recall message (thu hồi tin nhắn)
      */
     public static boolean recallMessage(String messageId) {
         String sql = "UPDATE messages SET is_recalled = TRUE, " +
@@ -351,7 +488,7 @@ public class MessageDAO {
     // ==================== DELETE ====================
 
     /**
-     * Delete message
+     * Delete message permanently
      */
     public static boolean deleteMessage(String messageId) {
         String sql = "DELETE FROM messages WHERE message_id = ?";
@@ -389,15 +526,29 @@ public class MessageDAO {
     // ==================== STATISTICS ====================
 
     /**
-     * Get message count for conversation
+     * ✅ Get message count with deletion filtering
      */
-    public static int getMessageCount(String conversationId) {
-        String sql = "SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?";
+    public static int getMessageCount(String conversationId, String userId) {
+        LocalDateTime deletionTime = ConversationDeletionDAO.getDeletionTimestamp(conversationId, userId);
+
+        String sql;
+        if (deletionTime != null) {
+            sql = "SELECT COUNT(*) as count FROM messages " +
+                    "WHERE conversation_id = ? AND timestamp > ?";
+        } else {
+            sql = "SELECT COUNT(*) as count FROM messages " +
+                    "WHERE conversation_id = ?";
+        }
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, conversationId);
+
+            if (deletionTime != null) {
+                ps.setTimestamp(2, Timestamp.valueOf(deletionTime));
+            }
+
             ResultSet rs = ps.executeQuery();
 
             if (rs.next()) {

@@ -15,17 +15,11 @@ public class ServerConfig {
         loadConfigs();
     }
 
-    /**
-     * Tải tất cả file cấu hình
-     */
     private static void loadConfigs() {
         serverProps = loadProperties(SERVER_CONFIG);
         dbProps = loadProperties(DB_CONFIG);
     }
 
-    /**
-     * Tải properties từ file
-     */
     private static Properties loadProperties(String filePath) {
         Properties props = new Properties();
         try (InputStream input = new FileInputStream(filePath)) {
@@ -48,6 +42,20 @@ public class ServerConfig {
 
     public static int getServerTimeout() {
         return Integer.parseInt(serverProps.getProperty("server.timeout", "300000"));
+    }
+
+    // ==================== CẤU HÌNH UDP MEDIA SERVER ====================
+
+    public static String getUdpServerIP() {
+        return serverProps.getProperty("udp.server.ip", "0.0.0.0");
+    }
+
+    public static int getUdpBasePort() {
+        return Integer.parseInt(serverProps.getProperty("udp.base.port", "50000"));
+    }
+
+    public static boolean isUdpAutoDetectIP() {
+        return Boolean.parseBoolean(serverProps.getProperty("udp.auto.detect.ip", "true"));
     }
 
     // ==================== CẤU HÌNH ZEROTIER ====================
@@ -174,6 +182,9 @@ public class ServerConfig {
         System.out.println("Phiên bản: " + getAppVersion());
         System.out.println("Port Server: " + getServerPort());
         System.out.println("Tối đa Clients: " + getMaxClients());
+        System.out.println("\n========== CẤU HÌNH UDP MEDIA ==========");
+        System.out.println("UDP Base Port: " + getUdpBasePort());
+        System.out.println("Auto Detect IP: " + (isUdpAutoDetectIP() ? "BẬT" : "TẮT"));
         System.out.println("\n========== CẤU HÌNH ZEROTIER ==========");
         System.out.println("Đã bật: " + isZeroTierEnabled());
         if (isZeroTierEnabled()) {

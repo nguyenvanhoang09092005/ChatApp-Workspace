@@ -5,7 +5,8 @@ import org.example.chatappclient.client.protocol.Protocol;
 import org.example.chatappclient.client.services.media.UdpMediaClient;
 
 /**
- * Service xử lý cuộc gọi thoại/video qua UDP - ĐÃ HOÀN CHỈNH
+ * Service xử lý cuộc gọi thoại/video qua UDP
+ * FIXED VERSION: Hỗ trợ đầy đủ tắt mic và tắt loa
  */
 public class CallService {
     private static volatile CallService instance;
@@ -221,9 +222,29 @@ public class CallService {
         System.out.println("Đã kết thúc cuộc gọi: " + callId);
     }
 
+    /**
+     * ✅ Tắt/Bật MIC
+     * Khi tắt mic, vẫn gửi silent packets để duy trì kết nối UDP
+     */
     public void setMuted(String callId, boolean muted) {
         if (mediaClient != null) {
             mediaClient.setMuted(muted);
+            System.out.println("CallService: " + (muted ? "Đã tắt mic" : "Đã bật mic"));
+        } else {
+            System.err.println("⚠️ Media client chưa được khởi tạo");
+        }
+    }
+
+    /**
+     * ✅ Tắt/Bật LOA (MỚI THÊM)
+     * Khi tắt loa, không phát âm thanh nhận được
+     */
+    public void setSpeakerEnabled(String callId, boolean enabled) {
+        if (mediaClient != null) {
+            mediaClient.setSpeakerEnabled(enabled);
+            System.out.println("CallService: " + (enabled ? "Đã bật loa" : "Đã tắt loa"));
+        } else {
+            System.err.println("⚠️ Media client chưa được khởi tạo");
         }
     }
 

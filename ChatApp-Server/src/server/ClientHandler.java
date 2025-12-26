@@ -9,6 +9,8 @@ import utils.ValidationUtil;
 import utils.EmailUtil;
 
 import java.io.*;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.List;
 
@@ -814,5 +816,17 @@ public class ClientHandler implements Runnable {
 
     public OutputStream getRawOutputStream() {
         return rawOutputStream;
+    }
+
+    public Socket getSocket() {
+        return socket;
+    }
+
+    public InetAddress getClientAddress() {
+        return socket != null ? socket.getInetAddress() : null;
+    }
+
+    public InetAddress getServerLocalAddress() {
+        return socket != null ? socket.getLocalAddress() : null;
     }
 }

@@ -3,6 +3,7 @@ package org.example.chatappclient.client.controllers.main.handlers;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
@@ -10,6 +11,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import org.example.chatappclient.client.models.Conversation;
 import org.example.chatappclient.client.models.Message;
+import org.example.chatappclient.client.utils.ui.ConversationInfoBuilder;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -439,48 +441,9 @@ public class UIComponentFactory {
 
     // ==================== INFO SIDEBAR ====================
 
-    public VBox createInfoSidebarContent(Conversation conv) {
-        VBox content = new VBox(20);
-        content.setPadding(new Insets(20));
-        content.setAlignment(Pos.TOP_CENTER);
-
-        // Avatar
-        ImageView avatar = createAvatar(conv.getAvatarUrl(), conv.getName(), 80);
-
-        Label name = new Label(conv.getName());
-        name.setStyle("-fx-font-size: 20px; -fx-font-weight: 700;");
-
-        String statusText = formatUserStatus(conv.isActive(), conv.getLastSeenTime());
-        Label status = new Label(statusText);
-        status.setStyle("-fx-font-size: 13px; -fx-text-fill: " +
-                (conv.isActive() ? "#31A24C" : "#65676b") + ";");
-
-        // Actions
-        HBox actions = new HBox(16);
-        actions.setAlignment(Pos.CENTER);
-        actions.getChildren().addAll(
-                createInfoAction("🔔", "Tắt thông báo"),
-                createInfoAction("🔍", "Tìm kiếm"),
-                createInfoAction("📌", "Ghim")
-        );
-
-        content.getChildren().addAll(avatar, name, status, actions);
-        return content;
-    }
-
-    private VBox createInfoAction(String icon, String label) {
-        VBox box = new VBox(4);
-        box.setAlignment(Pos.CENTER);
-        box.setCursor(javafx.scene.Cursor.HAND);
-
-        Label i = new Label(icon);
-        i.setStyle("-fx-font-size: 20px; -fx-background-color: #e4e6eb; -fx-padding: 10; -fx-background-radius: 20;");
-
-        Label t = new Label(label);
-        t.setStyle("-fx-font-size: 12px; -fx-text-fill: #65676b;");
-
-        box.getChildren().addAll(i, t);
-        return box;
+    public ScrollPane createInfoSidebarContent(Conversation conv) {
+        ConversationInfoBuilder infoBuilder = new ConversationInfoBuilder();
+        return infoBuilder.createInfoSidebarContent(conv);
     }
 
     // ==================== TIME FORMATTING ====================

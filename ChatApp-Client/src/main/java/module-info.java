@@ -3,6 +3,7 @@ module org.example.chatappclient {
     requires javafx.controls;
     requires javafx.fxml;
     requires javafx.graphics;
+    requires javafx.media;
 
     // Java tiêu chuẩn
     requires java.prefs;
@@ -14,7 +15,10 @@ module org.example.chatappclient {
 
     // Apache Commons
     requires org.apache.commons.lang3;
-    requires javafx.media;
+
+    // Webcam Capture
+    requires webcam.capture;
+    requires java.logging;
 
     // Export toàn bộ package để các module khác hoặc FXML truy cập
     exports org.example.chatappclient.client;
@@ -27,9 +31,13 @@ module org.example.chatappclient {
     exports org.example.chatappclient.client.utils.validation;
     exports org.example.chatappclient.client.utils.storage;
     exports org.example.chatappclient.client.utils.network;
+    exports org.example.chatappclient.client.utils.ui;
 
     // Mở package cho FXML loader (bắt buộc để JavaFX load controller)
     opens org.example.chatappclient.client.controllers.auth to javafx.fxml;
     opens org.example.chatappclient.client.controllers.main to javafx.fxml;
     opens org.example.chatappclient.client.models to javafx.base, com.google.gson;
+
+    // Mở package utils.ui cho JavaFX reflection
+    opens org.example.chatappclient.client.utils.ui to javafx.fxml;
 }

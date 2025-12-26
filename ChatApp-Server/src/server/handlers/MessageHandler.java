@@ -248,7 +248,6 @@ public class MessageHandler {
     }
 
     // ==================== GET HISTORY ====================
-
     private void handleGetHistory(String[] parts) {
         if (parts.length < 4) {
             clientHandler.sendMessage(Protocol.buildErrorResponse(
@@ -261,8 +260,11 @@ public class MessageHandler {
         String conversationId = parts[1];
         int offset = Integer.parseInt(parts[2]);
         int limit = Integer.parseInt(parts[3]);
+        String userId = clientHandler.getUserId();
 
-        List<Message> messages = MessageDAO.getMessagesPaginated(conversationId, offset, limit);
+        List<Message> messages = MessageDAO.getMessagesPaginatedForUser(
+                conversationId, offset, limit, userId
+        );
 
         StringBuilder data = new StringBuilder();
         for (int i = 0; i < messages.size(); i++) {
@@ -274,6 +276,8 @@ public class MessageHandler {
                 "Message history retrieved",
                 data.toString()
         ));
+
+        System.out.println("✅ Sent " + messages.size() + " messages (filtered by deletion timestamp)");
     }
 
     // ==================== MARK READ ====================

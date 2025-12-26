@@ -69,6 +69,10 @@ public class Protocol {
     public static final String CONVERSATION_PIN = "CONVERSATION_PIN";
     public static final String CONVERSATION_ARCHIVE = "CONVERSATION_ARCHIVE";
     public static final String CONVERSATION_UNARCHIVE = "CONVERSATION_UNARCHIVE";
+    public static final String CONVERSATION_DELETE_FOR_USER = "CONVERSATION_DELETE_FOR_USER";
+    public static final String CONVERSATION_RESTORED = "CONVERSATION_RESTORED";
+    public static final String CONVERSATION_RESTORE_FOR_USER = "CONVERSATION_RESTORE_FOR_USER";
+
 
     // ==================== STICKER/EMOJI COMMANDS ====================
     public static final String STICKER_GET_PACKS = "STICKER_GET_PACKS";
@@ -93,6 +97,16 @@ public class Protocol {
     public static final String CALL_UNMUTE = "CALL_UNMUTE";
     public static final String CALL_VIDEO_ON = "CALL_VIDEO_ON";
     public static final String CALL_VIDEO_OFF = "CALL_VIDEO_OFF";
+
+    public static final String MESSAGE_DELETE_ALL = "MESSAGE_DELETE_ALL";
+
+    // ==================== CALL HISTORY COMMANDS ====================
+    public static final String CALL_HISTORY_GET = "CALL_HISTORY_GET";
+    public static final String CALL_HISTORY_GET_BY_CONV = "CALL_HISTORY_GET_BY_CONV";
+    public static final String CALL_HISTORY_GET_MISSED = "CALL_HISTORY_GET_MISSED";
+    public static final String CALL_HISTORY_DELETE = "CALL_HISTORY_DELETE";
+    public static final String CALL_HISTORY_CLEAR = "CALL_HISTORY_CLEAR";
+    public static final String CALL_HISTORY_STATS = "CALL_HISTORY_STATS";
     // ==================== FILE COMMANDS ====================
     public static final String FILE_UPLOAD = "FILE_UPLOAD";
     public static final String FILE_DOWNLOAD = "FILE_DOWNLOAD";
@@ -121,6 +135,7 @@ public class Protocol {
     public static final String FIELD_DELIMITER = "::";
     public static final String LIST_DELIMITER = ",";
     public static final String END_OF_MESSAGE = "\n";
+
 
     // ==================== UTILITY METHODS ====================
 

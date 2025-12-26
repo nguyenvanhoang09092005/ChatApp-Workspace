@@ -10,15 +10,12 @@ import java.util.List;
 
 /**
  * Data Access Object for Conversation table
- * Handles all database operations related to conversations
+ * ✅ Hỗ trợ xóa conversation riêng cho từng user
  */
 public class ConversationDAO {
 
     // ==================== CREATE ====================
 
-    /**
-     * Create new conversation
-     */
     public static boolean createConversation(Conversation conversation) {
         String sql = "INSERT INTO conversations (conversation_id, type, name, avatar_url, " +
                 "description, member_ids, creator_id, is_active, created_at, updated_at) " +
@@ -48,12 +45,7 @@ public class ConversationDAO {
         }
     }
 
-    /**
-     * Create private conversation between two users
-     */
     public static Conversation createPrivateConversation(String userId1, String userId2) {
-
-        // Check if conversation already exists
         Conversation existing = findPrivateConversation(userId1, userId2);
         if (existing != null) {
             return existing;
@@ -70,21 +62,15 @@ public class ConversationDAO {
         return null;
     }
 
-    /**
-     * Create group conversation
-     */
     public static Conversation createGroupConversation(String name,
                                                        String creatorId,
                                                        List<String> memberIds) {
-
-        Conversation conversation =
-                new Conversation(Conversation.TYPE_GROUP, name, creatorId);
-
+        Conversation conversation = new Conversation(Conversation.TYPE_GROUP, name, creatorId);
         conversation.addMember(creatorId);
 
         if (memberIds != null) {
             for (String id : memberIds) {
-                conversation.addMember(id); // will auto ignore duplicate
+                conversation.addMember(id);
             }
         }
 
@@ -97,11 +83,7 @@ public class ConversationDAO {
 
     // ==================== READ ====================
 
-    /**
-     * Find conversation by ID
-     */
     public static Conversation findById(String conversationId) {
-
         String sql = "SELECT * FROM conversations " +
                 "WHERE conversation_id = ? AND is_active = TRUE";
 
@@ -126,11 +108,7 @@ public class ConversationDAO {
         return findById(conversationId);
     }
 
-    /**
-     * Find private conversation between two users
-     */
     public static Conversation findPrivateConversation(String userId1, String userId2) {
-
         String sql = "SELECT * FROM conversations " +
                 "WHERE type = ? AND is_active = TRUE " +
                 "AND FIND_IN_SET(?, member_ids) > 0 " +
@@ -163,14 +141,18 @@ public class ConversationDAO {
     }
 
     /**
-     * Get all conversations for a user
+     * ✅ UPDATED: Lấy conversations của user, loại trừ những cái đã bị xóa
      */
     public static List<Conversation> getUserConversations(String userId) {
-
-        String sql = "SELECT * FROM conversations " +
-                "WHERE is_active = TRUE " +
-                "AND FIND_IN_SET(?, member_ids) > 0 " +
-                "ORDER BY updated_at DESC";
+        String sql = "SELECT c.* FROM conversations c " +
+                "WHERE c.is_active = TRUE " +
+                "AND FIND_IN_SET(?, c.member_ids) > 0 " +
+                "AND NOT EXISTS (" +
+                "  SELECT 1 FROM conversation_deletions cd " +
+                "  WHERE cd.conversation_id = c.conversation_id " +
+                "  AND cd.user_id = ?" +
+                ") " +
+                "ORDER BY c.updated_at DESC";
 
         List<Conversation> conversations = new ArrayList<>();
 
@@ -178,6 +160,7 @@ public class ConversationDAO {
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, userId);
+            ps.setString(2, userId);
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
@@ -192,14 +175,18 @@ public class ConversationDAO {
     }
 
     /**
-     * Get group conversations for a user
+     * ✅ UPDATED: Lấy group conversations, loại trừ những cái đã bị xóa
      */
     public static List<Conversation> getUserGroupConversations(String userId) {
-
-        String sql = "SELECT * FROM conversations " +
-                "WHERE type = ? AND is_active = TRUE " +
-                "AND FIND_IN_SET(?, member_ids) > 0 " +
-                "ORDER BY updated_at DESC";
+        String sql = "SELECT c.* FROM conversations c " +
+                "WHERE c.type = ? AND c.is_active = TRUE " +
+                "AND FIND_IN_SET(?, c.member_ids) > 0 " +
+                "AND NOT EXISTS (" +
+                "  SELECT 1 FROM conversation_deletions cd " +
+                "  WHERE cd.conversation_id = c.conversation_id " +
+                "  AND cd.user_id = ?" +
+                ") " +
+                "ORDER BY c.updated_at DESC";
 
         List<Conversation> conversations = new ArrayList<>();
 
@@ -208,6 +195,7 @@ public class ConversationDAO {
 
             ps.setString(1, Conversation.TYPE_GROUP);
             ps.setString(2, userId);
+            ps.setString(3, userId);
 
             ResultSet rs = ps.executeQuery();
 
@@ -223,15 +211,19 @@ public class ConversationDAO {
     }
 
     /**
-     * Search conversation by name
+     * ✅ UPDATED: Search conversations, loại trừ những cái đã bị xóa
      */
     public static List<Conversation> searchConversations(String userId, String keyword) {
-
-        String sql = "SELECT * FROM conversations " +
-                "WHERE is_active = TRUE " +
-                "AND FIND_IN_SET(?, member_ids) > 0 " +
-                "AND name LIKE ? " +
-                "ORDER BY updated_at DESC";
+        String sql = "SELECT c.* FROM conversations c " +
+                "WHERE c.is_active = TRUE " +
+                "AND FIND_IN_SET(?, c.member_ids) > 0 " +
+                "AND c.name LIKE ? " +
+                "AND NOT EXISTS (" +
+                "  SELECT 1 FROM conversation_deletions cd " +
+                "  WHERE cd.conversation_id = c.conversation_id " +
+                "  AND cd.user_id = ?" +
+                ") " +
+                "ORDER BY c.updated_at DESC";
 
         List<Conversation> conversations = new ArrayList<>();
 
@@ -240,6 +232,7 @@ public class ConversationDAO {
 
             ps.setString(1, userId);
             ps.setString(2, "%" + keyword + "%");
+            ps.setString(3, userId);
 
             ResultSet rs = ps.executeQuery();
 
@@ -256,14 +249,10 @@ public class ConversationDAO {
 
     // ==================== UPDATE ====================
 
-    /**
-     * Update conversation info
-     */
     public static boolean updateConversation(String conversationId,
                                              String name,
                                              String avatarUrl,
                                              String description) {
-
         String sql = "UPDATE conversations SET name = ?, avatar_url = ?, " +
                 "description = ?, updated_at = ? " +
                 "WHERE conversation_id = ?";
@@ -285,13 +274,9 @@ public class ConversationDAO {
         }
     }
 
-    /**
-     * Update last message
-     */
     public static boolean updateLastMessage(String conversationId,
                                             String message,
                                             LocalDateTime timestamp) {
-
         String sql = "UPDATE conversations SET last_message = ?, " +
                 "last_message_time = ?, updated_at = ? " +
                 "WHERE conversation_id = ?";
@@ -314,40 +299,27 @@ public class ConversationDAO {
 
     // ==================== MEMBERS ====================
 
-    /**
-     * Add member to group
-     */
     public static boolean addMember(String conversationId, String userId) {
-
         Conversation conv = findById(conversationId);
 
         if (conv == null || !conv.isGroup()) return false;
-
-        if (conv.hasMember(userId)) return true; // already in group
+        if (conv.hasMember(userId)) return true;
 
         conv.addMember(userId);
-
         return updateMembers(conversationId, conv.getMemberIdsAsString());
     }
 
-    /**
-     * Remove member from group
-     */
     public static boolean removeMember(String conversationId, String userId) {
-
         Conversation conv = findById(conversationId);
 
         if (conv == null || !conv.isGroup()) return false;
-
         if (!conv.hasMember(userId)) return true;
 
         conv.removeMember(userId);
-
         return updateMembers(conversationId, conv.getMemberIdsAsString());
     }
 
     private static boolean updateMembers(String conversationId, String memberIds) {
-
         String sql = "UPDATE conversations SET member_ids = ?, updated_at = ? " +
                 "WHERE conversation_id = ?";
 
@@ -369,10 +341,9 @@ public class ConversationDAO {
     // ==================== DELETE ====================
 
     /**
-     * Soft delete conversation
+     * ✅ CHANGED: Soft delete for all users (admin action)
      */
     public static boolean deleteConversation(String conversationId) {
-
         String sql = "UPDATE conversations SET is_active = FALSE, updated_at = ? " +
                 "WHERE conversation_id = ?";
 
@@ -391,10 +362,13 @@ public class ConversationDAO {
     }
 
     /**
-     * Hard delete conversation
+     * ✅ NEW: Xóa conversation chỉ cho một user cụ thể
      */
-    public static boolean hardDeleteConversation(String conversationId) {
+    public static boolean deleteConversationForUser(String conversationId, String userId) {
+        return ConversationDeletionDAO.markConversationAsDeletedForUser(conversationId, userId);
+    }
 
+    public static boolean hardDeleteConversation(String conversationId) {
         String sql = "DELETE FROM conversations WHERE conversation_id = ?";
 
         try (Connection conn = DBConnection.getConnection();
@@ -412,18 +386,23 @@ public class ConversationDAO {
     // ==================== STATISTICS ====================
 
     /**
-     * Get conversation count for user
+     * ✅ UPDATED: Đếm conversations, loại trừ những cái đã bị xóa
      */
     public static int getUserConversationCount(String userId) {
-
-        String sql = "SELECT COUNT(*) FROM conversations " +
-                "WHERE is_active = TRUE " +
-                "AND FIND_IN_SET(?, member_ids) > 0";
+        String sql = "SELECT COUNT(*) FROM conversations c " +
+                "WHERE c.is_active = TRUE " +
+                "AND FIND_IN_SET(?, c.member_ids) > 0 " +
+                "AND NOT EXISTS (" +
+                "  SELECT 1 FROM conversation_deletions cd " +
+                "  WHERE cd.conversation_id = c.conversation_id " +
+                "  AND cd.user_id = ?" +
+                ")";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, userId);
+            ps.setString(2, userId);
 
             ResultSet rs = ps.executeQuery();
             if (rs.next()) return rs.getInt(1);
@@ -437,12 +416,8 @@ public class ConversationDAO {
 
     // ==================== MAPPING ====================
 
-    /**
-     * Map ResultSet to Conversation object
-     */
     private static Conversation mapResultSetToConversation(ResultSet rs)
             throws SQLException {
-
         Conversation conversation = new Conversation();
 
         conversation.setConversationId(rs.getString("conversation_id"));
@@ -472,5 +447,4 @@ public class ConversationDAO {
 
         return conversation;
     }
-
 }

@@ -4,13 +4,15 @@ import javafx.application.Platform;
 import org.example.chatappclient.client.controllers.main.MainController;
 import org.example.chatappclient.client.models.Conversation;
 import org.example.chatappclient.client.services.CallService;
+import org.example.chatappclient.client.services.media.UdpMediaClient;
 import org.example.chatappclient.client.utils.ui.*;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Handler xử lý cuộc gọi thoại và video - Sử dụng IconLoader
+ * ✅ FINAL FIXED: Call Handler với Video Streaming hoàn chỉnh
+ * Fix: Đảm bảo callback được register TRƯỚC KHI dialog.setConnected()
  */
 public class CallHandler {
 
@@ -19,12 +21,10 @@ public class CallHandler {
     private final ExecutorService executor;
     private ConversationHandler conversationHandler;
 
-    // Call dialogs
     private AudioCallDialog audioCallDialog;
     private VideoCallDialog videoCallDialog;
     private IncomingCallDialog incomingCallDialog;
 
-    // Call state
     private String currentCallId;
     private boolean isInCall = false;
 
@@ -33,15 +33,10 @@ public class CallHandler {
         this.callService = CallService.getInstance();
         this.executor = Executors.newCachedThreadPool();
 
-        // Preload icons khi khởi tạo
         preloadIcons();
-
         setupCallListener();
     }
 
-    /**
-     * Preload tất cả icons cần thiết cho cuộc gọi
-     */
     private void preloadIcons() {
         executor.submit(() -> {
             System.out.println("🔄 Preloading call icons...");
@@ -51,62 +46,10 @@ public class CallHandler {
 
     public void setConversationHandler(ConversationHandler conversationHandler) {
         this.conversationHandler = conversationHandler;
-        System.out.println("✅ ConversationHandler được set cho CallHandler");
+        System.out.println("✅ ConversationHandler set for CallHandler");
     }
 
-    // ==================== START CALLS ====================
-
-    public void startAudioCall() {
-        String conversationId = mainController.getCurrentConversationId();
-
-        if (conversationId == null) {
-            AlertUtil.showToastWarning("Vui lòng chọn một cuộc trò chuyện");
-            return;
-        }
-
-        if (isInCall) {
-            AlertUtil.showToastWarning("Bạn đang trong một cuộc gọi khác");
-            return;
-        }
-
-        executor.submit(() -> {
-            try {
-                Platform.runLater(() ->
-                        AlertUtil.showToastInfo("Đang kết nối cuộc gọi thoại...")
-                );
-
-                currentCallId = callService.startCall(
-                        conversationId,
-                        mainController.getCurrentUser().getUserId(),
-                        "audio"
-                );
-
-                if (currentCallId != null) {
-                    isInCall = true;
-
-                    // Get partner info
-                    String partnerName = getPartnerName(conversationId);
-                    String avatarUrl = getPartnerAvatar(conversationId);
-
-                    Platform.runLater(() ->
-                            showAudioCallDialog(partnerName, avatarUrl)
-                    );
-
-                    System.out.println("✅ Cuộc gọi audio bắt đầu: " + currentCallId);
-                } else {
-                    Platform.runLater(() ->
-                            AlertUtil.showToastError("Không thể bắt đầu cuộc gọi")
-                    );
-                }
-
-            } catch (Exception e) {
-                Platform.runLater(() ->
-                        AlertUtil.showToastError("Lỗi: " + e.getMessage())
-                );
-                e.printStackTrace();
-            }
-        });
-    }
+    // ==================== START VIDEO CALL ====================
 
     public void startVideoCall() {
         String conversationId = mainController.getCurrentConversationId();
@@ -137,11 +80,27 @@ public class CallHandler {
                     isInCall = true;
                     String partnerName = getPartnerName(conversationId);
 
-                    Platform.runLater(() ->
-                            showVideoCallDialog(partnerName)
-                    );
+                    Platform.runLater(() -> {
+                        showVideoCallDialog(partnerName);
 
-                    System.out.println("✅ Cuộc gọi video bắt đầu: " + currentCallId);
+                        // ✅ Setup video streaming NGAY sau khi dialog được tạo
+                        setupVideoStreaming();
+
+                        // Enable speaker sau khi setup xong
+                        executor.submit(() -> {
+                            try {
+                                Thread.sleep(300);
+                                callService.setSpeakerEnabled(currentCallId, true);
+                                System.out.println("🔊 Speaker ON");
+                                System.out.println("CallService: Đã bật loa");
+                                System.out.println("✅ Speaker enabled for video caller");
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    });
+
+                    System.out.println("✅ Video call started: " + currentCallId);
                 } else {
                     Platform.runLater(() ->
                             AlertUtil.showToastError("Không thể bắt đầu cuộc gọi")
@@ -157,7 +116,110 @@ public class CallHandler {
         });
     }
 
-    // ==================== CALL ACTIONS ====================
+    // ==================== START AUDIO CALL ====================
+
+    public void startAudioCall() {
+        String conversationId = mainController.getCurrentConversationId();
+
+        if (conversationId == null) {
+            AlertUtil.showToastWarning("Vui lòng chọn một cuộc trò chuyện");
+            return;
+        }
+
+        if (isInCall) {
+            AlertUtil.showToastWarning("Bạn đang trong một cuộc gọi khác");
+            return;
+        }
+
+        executor.submit(() -> {
+            try {
+                Platform.runLater(() ->
+                        AlertUtil.showToastInfo("Đang kết nối cuộc gọi thoại...")
+                );
+
+                currentCallId = callService.startCall(
+                        conversationId,
+                        mainController.getCurrentUser().getUserId(),
+                        "audio"
+                );
+
+                if (currentCallId != null) {
+                    isInCall = true;
+
+                    String partnerName = getPartnerName(conversationId);
+                    String avatarUrl = getPartnerAvatar(conversationId);
+
+                    Platform.runLater(() -> {
+                        showAudioCallDialog(partnerName, avatarUrl);
+
+                        executor.submit(() -> {
+                            try {
+                                Thread.sleep(300);
+                                callService.setSpeakerEnabled(currentCallId, true);
+                                System.out.println("✅ Speaker enabled for caller");
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    });
+
+                    System.out.println("✅ Audio call started: " + currentCallId);
+                } else {
+                    Platform.runLater(() ->
+                            AlertUtil.showToastError("Không thể bắt đầu cuộc gọi")
+                    );
+                }
+
+            } catch (Exception e) {
+                Platform.runLater(() ->
+                        AlertUtil.showToastError("Lỗi: " + e.getMessage())
+                );
+                e.printStackTrace();
+            }
+        });
+    }
+
+    // ==================== ✅ VIDEO STREAMING SETUP - FIXED ====================
+
+    /**
+     * ✅ CRITICAL FIX: Setup video streaming với proper callback registration
+     */
+    private void setupVideoStreaming() {
+        if (videoCallDialog == null) {
+            System.err.println("❌ VideoCallDialog is null - Cannot setup video streaming");
+            return;
+        }
+
+        UdpMediaClient mediaClient = callService.getMediaClient();
+        if (mediaClient == null) {
+            System.err.println("❌ MediaClient is null - Cannot setup video streaming");
+            return;
+        }
+
+        // ✅ CALLBACK 1: Gửi video từ webcam → server
+        videoCallDialog.setOnVideoData(frame -> {
+            if (frame != null && mediaClient != null) {
+                mediaClient.sendVideoFrame(frame);
+            }
+        });
+        System.out.println("✅ Video send callback registered");
+
+        // ✅ CALLBACK 2: Nhận video từ server → hiển thị lên màn hình
+        mediaClient.setOnVideoFrameReceived(frame -> {
+            if (frame != null && videoCallDialog != null) {
+                Platform.runLater(() -> {
+                    videoCallDialog.receiveVideoFrame(frame);
+                });
+            }
+        });
+        System.out.println("✅ Video receive callback registered");
+
+        System.out.println("✅ Video streaming setup complete");
+        System.out.println("   Webcam → Server: ACTIVE");
+        System.out.println("   Server → Display: ACTIVE");
+    }
+
+    // ==================== ANSWER CALL ====================
 
     public void answerCall(String callId, String callType) {
         executor.submit(() -> {
@@ -172,16 +234,20 @@ public class CallHandler {
                     isInCall = true;
 
                     Platform.runLater(() -> {
-                        // Đóng dialog cuộc gọi đến
+                        // Close incoming dialog
                         if (incomingCallDialog != null) {
                             incomingCallDialog.close();
                             incomingCallDialog = null;
                         }
 
-                        // Show appropriate call dialog
+                        // Show appropriate dialog
                         if ("video".equals(callType)) {
                             String partnerName = "Người dùng";
                             showVideoCallDialog(partnerName);
+
+                            // ✅ Setup video streaming TRƯỚC KHI setConnected
+                            setupVideoStreaming();
+
                         } else {
                             String partnerName = "Người dùng";
                             String avatarUrl = null;
@@ -189,18 +255,27 @@ public class CallHandler {
                         }
                     });
 
-                    // Set connected state after 1 second
-                    Thread.sleep(1000);
+                    // Wait for dialog and callbacks to be ready
+                    Thread.sleep(500);
+
+                    // Now set connected state - this will start webcam
                     Platform.runLater(() -> {
                         if (audioCallDialog != null) {
                             audioCallDialog.setConnected();
+                            callService.setSpeakerEnabled(callId, true);
+                            System.out.println("✅ Audio call connected (receiver)");
                         }
+
                         if (videoCallDialog != null) {
                             videoCallDialog.setConnected();
+                            callService.setSpeakerEnabled(callId, true);
+                            System.out.println("🔊 Speaker ON");
+                            System.out.println("CallService: Đã bật loa");
+                            System.out.println("✅ Video call connected (receiver)");
                         }
                     });
 
-                    System.out.println("✅ Đã trả lời cuộc gọi: " + callId);
+                    System.out.println("✅ Call answered: " + callId);
                 }
 
             } catch (Exception e) {
@@ -211,6 +286,8 @@ public class CallHandler {
             }
         });
     }
+
+    // ==================== REJECT/END CALL ====================
 
     public void rejectCall(String callId) {
         executor.submit(() -> {
@@ -225,17 +302,17 @@ public class CallHandler {
                     AlertUtil.showToastInfo("Đã từ chối cuộc gọi");
                 });
 
-                System.out.println("✅ Đã từ chối cuộc gọi: " + callId);
+                System.out.println("✅ Call rejected: " + callId);
 
             } catch (Exception e) {
-                System.err.println("❌ Lỗi từ chối cuộc gọi: " + e.getMessage());
+                System.err.println("❌ Error rejecting call: " + e.getMessage());
             }
         });
     }
 
     public void endCall() {
         if (currentCallId == null) {
-            System.out.println("⚠️ Không có cuộc gọi nào đang hoạt động");
+            System.out.println("⚠️ No active call");
             return;
         }
 
@@ -251,10 +328,10 @@ public class CallHandler {
                     AlertUtil.showToastInfo("Cuộc gọi đã kết thúc");
                 });
 
-                System.out.println("✅ Đã kết thúc cuộc gọi: " + callIdToEnd);
+                System.out.println("✅ Call ended: " + callIdToEnd);
 
             } catch (Exception e) {
-                System.err.println("❌ Lỗi kết thúc cuộc gọi: " + e.getMessage());
+                System.err.println("❌ Error ending call: " + e.getMessage());
                 Platform.runLater(() -> {
                     closeAllDialogs();
                     resetCallState();
@@ -262,6 +339,8 @@ public class CallHandler {
             }
         });
     }
+
+    // ==================== CONTROL METHODS ====================
 
     public void toggleMute() {
         if (currentCallId != null) {
@@ -274,7 +353,7 @@ public class CallHandler {
             }
 
             callService.setMuted(currentCallId, isMuted);
-            System.out.println(isMuted ? "🔇 Đã tắt tiếng" : "🔊 Đã bật tiếng");
+            System.out.println(isMuted ? "🔇 Muted" : "🔊 Unmuted");
         }
     }
 
@@ -282,37 +361,19 @@ public class CallHandler {
         if (currentCallId != null && videoCallDialog != null) {
             boolean isVideoEnabled = videoCallDialog.isVideoEnabled();
             callService.setVideoEnabled(currentCallId, isVideoEnabled);
-            System.out.println(isVideoEnabled ? "📹 Đã bật video" : "📷 Đã tắt video");
+            System.out.println(isVideoEnabled ? "📹 Video ON" : "📷 Video OFF");
         }
     }
 
     public void switchCamera() {
         if (currentCallId != null) {
             callService.switchCamera(currentCallId);
-            System.out.println("🔄 Đã chuyển camera");
+            System.out.println("🔄 Switch camera");
+            System.out.println("🔄 Camera switched");
         }
     }
 
-    // ==================== CALL UI ====================
-
-    private void showAudioCallDialog(String partnerName, String avatarUrl) {
-        try {
-            audioCallDialog = new AudioCallDialog(partnerName, avatarUrl);
-
-            audioCallDialog.setOnMuteToggle(this::toggleMute);
-            audioCallDialog.setOnEndCall(this::endCall);
-
-            audioCallDialog.setRinging();
-            audioCallDialog.show();
-
-            System.out.println("✅ Đã hiển thị AudioCallDialog cho: " + partnerName);
-
-        } catch (Exception e) {
-            System.err.println("❌ Lỗi hiển thị AudioCallDialog: " + e.getMessage());
-            e.printStackTrace();
-            AlertUtil.showToastError("Không thể hiển thị giao diện cuộc gọi");
-        }
-    }
+    // ==================== SHOW DIALOGS ====================
 
     private void showVideoCallDialog(String partnerName) {
         try {
@@ -326,10 +387,42 @@ public class CallHandler {
             videoCallDialog.setRinging();
             videoCallDialog.show();
 
-            System.out.println("✅ Đã hiển thị VideoCallDialog cho: " + partnerName);
+            System.out.println("✅ VideoCallDialog shown");
 
         } catch (Exception e) {
-            System.err.println("❌ Lỗi hiển thị VideoCallDialog: " + e.getMessage());
+            System.err.println("❌ Error showing VideoCallDialog: " + e.getMessage());
+            e.printStackTrace();
+            AlertUtil.showToastError("Không thể hiển thị giao diện cuộc gọi");
+        }
+    }
+
+    private void showAudioCallDialog(String partnerName, String avatarUrl) {
+        try {
+            audioCallDialog = new AudioCallDialog(partnerName, avatarUrl);
+
+            audioCallDialog.setOnMuteToggle(() -> {
+                if (currentCallId != null) {
+                    boolean isMuted = audioCallDialog.isMuted();
+                    callService.setMuted(currentCallId, isMuted);
+                }
+            });
+
+            audioCallDialog.setOnSpeakerToggle(() -> {
+                if (currentCallId != null) {
+                    boolean isSpeakerOn = audioCallDialog.isSpeakerOn();
+                    callService.setSpeakerEnabled(currentCallId, isSpeakerOn);
+                }
+            });
+
+            audioCallDialog.setOnEndCall(this::endCall);
+
+            audioCallDialog.setRinging();
+            audioCallDialog.show();
+
+            System.out.println("✅ AudioCallDialog shown");
+
+        } catch (Exception e) {
+            System.err.println("❌ Error showing AudioCallDialog: " + e.getMessage());
             e.printStackTrace();
             AlertUtil.showToastError("Không thể hiển thị giao diện cuộc gọi");
         }
@@ -345,10 +438,10 @@ public class CallHandler {
 
             incomingCallDialog.show();
 
-            System.out.println("✅ Đã hiển thị IncomingCallDialog từ: " + callerName);
+            System.out.println("✅ IncomingCallDialog shown from: " + callerName);
 
         } catch (Exception e) {
-            System.err.println("❌ Lỗi hiển thị IncomingCallDialog: " + e.getMessage());
+            System.err.println("❌ Error showing IncomingCallDialog: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -358,7 +451,7 @@ public class CallHandler {
             try {
                 audioCallDialog.close();
             } catch (Exception e) {
-                System.err.println("⚠️ Lỗi đóng AudioCallDialog: " + e.getMessage());
+                System.err.println("⚠️ Error closing AudioCallDialog: " + e.getMessage());
             }
             audioCallDialog = null;
         }
@@ -367,7 +460,7 @@ public class CallHandler {
             try {
                 videoCallDialog.close();
             } catch (Exception e) {
-                System.err.println("⚠️ Lỗi đóng VideoCallDialog: " + e.getMessage());
+                System.err.println("⚠️ Error closing VideoCallDialog: " + e.getMessage());
             }
             videoCallDialog = null;
         }
@@ -376,30 +469,27 @@ public class CallHandler {
             try {
                 incomingCallDialog.close();
             } catch (Exception e) {
-                System.err.println("⚠️ Lỗi đóng IncomingCallDialog: " + e.getMessage());
+                System.err.println("⚠️ Error closing IncomingCallDialog: " + e.getMessage());
             }
             incomingCallDialog = null;
         }
 
-        System.out.println("🗑️ Đã đóng tất cả dialog cuộc gọi");
+        System.out.println("🗑️ All dialogs closed");
     }
 
-    // ==================== REALTIME LISTENER ====================
+    // ==================== REALTIME LISTENERS ====================
 
     private void setupCallListener() {
-        // Incoming call
         callService.setOnIncomingCall((callId, callerId, callerName, callType) -> {
-            System.out.println("📞 Cuộc gọi đến từ: " + callerName + " (" + callType + ")");
+            System.out.println("📞 Incoming call from: " + callerName + " (" + callType + ")");
 
-            // Get avatar URL
             String avatarUrl = null;
             try {
                 if (conversationHandler != null) {
-                    // Có thể cần fetch từ UserService thay vì ConversationHandler
                     avatarUrl = getPartnerAvatar(callerId);
                 }
             } catch (Exception e) {
-                System.err.println("⚠️ Không thể lấy avatar: " + e.getMessage());
+                System.err.println("⚠️ Cannot get avatar: " + e.getMessage());
             }
 
             final String finalAvatarUrl = avatarUrl;
@@ -408,56 +498,64 @@ public class CallHandler {
             );
         });
 
-        // Call answered
         callService.setOnCallAnswered(callId -> {
             Platform.runLater(() -> {
                 AlertUtil.showToastSuccess("Cuộc gọi đã được kết nối");
 
                 if (audioCallDialog != null) {
                     audioCallDialog.setConnected();
-                }
-                if (videoCallDialog != null) {
-                    videoCallDialog.setConnected();
+                    callService.setSpeakerEnabled(callId, true);
                 }
 
-                System.out.println("✅ Cuộc gọi đã kết nối: " + callId);
+                if (videoCallDialog != null) {
+                    // ✅ Setup video streaming TRƯỚC KHI setConnected
+                    setupVideoStreaming();
+
+                    // Delay nhỏ để callback register xong
+                    executor.submit(() -> {
+                        try {
+                            Thread.sleep(300);
+                            Platform.runLater(() -> {
+                                videoCallDialog.setConnected();
+                                callService.setSpeakerEnabled(callId, true);
+                                System.out.println("🔊 Speaker ON");
+                                System.out.println("CallService: Đã bật loa");
+                            });
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    });
+                }
+
+                System.out.println("✅ Call connected: " + callId);
             });
         });
 
-        // Call rejected
         callService.setOnCallRejected(callId -> {
             Platform.runLater(() -> {
                 AlertUtil.showToastInfo("Cuộc gọi bị từ chối");
                 closeAllDialogs();
                 resetCallState();
-
-                System.out.println("❌ Cuộc gọi bị từ chối: " + callId);
             });
         });
 
-        // Call ended
         callService.setOnCallEnded(callId -> {
             Platform.runLater(() -> {
                 AlertUtil.showToastInfo("Cuộc gọi đã kết thúc");
                 closeAllDialogs();
                 resetCallState();
-
-                System.out.println("✅ Cuộc gọi đã kết thúc: " + callId);
             });
         });
 
-        // Call error
         callService.setOnCallError((callId, error) -> {
             Platform.runLater(() -> {
                 AlertUtil.showToastError("Lỗi cuộc gọi: " + error);
                 closeAllDialogs();
                 resetCallState();
-
-                System.err.println("❌ Lỗi cuộc gọi " + callId + ": " + error);
             });
         });
 
-        System.out.println("✅ Đã thiết lập CallService listeners");
+        System.out.println("✅ CallService listeners setup complete");
     }
 
     // ==================== HELPERS ====================
@@ -471,7 +569,7 @@ public class CallHandler {
                 }
             }
         } catch (Exception e) {
-            System.err.println("⚠️ Không thể lấy partner name: " + e.getMessage());
+            System.err.println("⚠️ Cannot get partner name: " + e.getMessage());
         }
         return "Người dùng";
     }
@@ -485,7 +583,7 @@ public class CallHandler {
                 }
             }
         } catch (Exception e) {
-            System.err.println("⚠️ Không thể lấy partner avatar: " + e.getMessage());
+            System.err.println("⚠️ Cannot get partner avatar: " + e.getMessage());
         }
         return null;
     }
@@ -493,10 +591,8 @@ public class CallHandler {
     private void resetCallState() {
         currentCallId = null;
         isInCall = false;
-        System.out.println("🔄 Call state đã được reset");
+        System.out.println("🔄 Call state reset");
     }
-
-    // ==================== PUBLIC GETTERS ====================
 
     public boolean isInCall() {
         return isInCall;
@@ -506,10 +602,8 @@ public class CallHandler {
         return currentCallId;
     }
 
-    // ==================== CLEANUP ====================
-
     public void cleanup() {
-        System.out.println("🧹 Đang cleanup CallHandler...");
+        System.out.println("🧹 Cleaning up CallHandler...");
 
         if (isInCall) {
             endCall();
@@ -519,12 +613,8 @@ public class CallHandler {
 
         if (executor != null && !executor.isShutdown()) {
             executor.shutdown();
-            System.out.println("✅ Executor đã được shutdown");
         }
 
-        // Clear icon cache nếu cần
-        // IconLoader.clearCache();
-
-        System.out.println("✅ CallHandler đã được cleanup hoàn toàn");
+        System.out.println("✅ CallHandler cleanup complete");
     }
 }

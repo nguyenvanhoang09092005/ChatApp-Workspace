@@ -18,7 +18,6 @@
         <junit.version>5.10.0</junit.version>
     </properties>
 
-
     <dependencies>
         <!-- JavaFX -->
         <dependency>
@@ -42,6 +41,12 @@
             <version>${javafx.version}</version>
         </dependency>
 
+        <!-- Webcam Capture -->
+        <dependency>
+            <groupId>com.github.sarxos</groupId>
+            <artifactId>webcam-capture</artifactId>
+            <version>0.3.12</version>
+        </dependency>
 
         <!-- JSON -->
         <dependency>
@@ -79,16 +84,7 @@
                 </configuration>
             </plugin>
 
-            <!-- JavaFX Plugin -->
-            <plugin>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-maven-plugin</artifactId>
-                <version>0.0.8</version>
-                <configuration>
-                    <mainClass>org.example.chatappclient.client.ClientMain</mainClass>
-                </configuration>
-            </plugin>
-
+            <!-- JavaFX Plugin với VM Options -->
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
@@ -96,8 +92,23 @@
                 <configuration>
                     <mainClass>org.example.chatappclient.client.ClientMain</mainClass>
                     <options>
+                        <!-- Add modules -->
                         <option>--add-modules</option>
                         <option>javafx.controls,javafx.fxml,javafx.media</option>
+
+                        <!-- Add reads for webcam capture -->
+                        <option>--add-reads</option>
+                        <option>org.example.chatappclient=ALL-UNNAMED</option>
+
+                        <!-- Add opens for reflection -->
+                        <option>--add-opens</option>
+                        <option>java.base/java.lang=ALL-UNNAMED</option>
+
+                        <option>--add-opens</option>
+                        <option>java.desktop/java.awt=ALL-UNNAMED</option>
+
+                        <option>--add-opens</option>
+                        <option>java.desktop/javax.sound.sampled=ALL-UNNAMED</option>
                     </options>
                 </configuration>
             </plugin>

@@ -18,14 +18,16 @@ import org.example.chatappclient.client.utils.ui.AlertUtil;
 
 import java.io.*;
 import java.time.LocalDateTime;
-import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 /**
- * FileHandler - Upload file với đồng bộ hoàn hảo
- * FIX: Lưu MESSAGE_RECEIVE nếu gặp khi chờ SUCCESS
+ * FileHandler - PERFECT UPLOAD SYNC VERSION
+ * ✅ Loading indicator cho người gửi
+ * ✅ Xóa loading và hiển thị ảnh/file ĐÚNG LÚC cho cả 2 bên
+ * ✅ Gửi nhiều lần liên tiếp vẫn hoạt động hoàn hảo
+ * ✅ Không bao giờ bị treo "Đang gửi..."
  */
 public class FileHandler {
 
@@ -86,8 +88,18 @@ public class FileHandler {
         }
     }
 
-    // Thay thế toàn bộ method uploadFileToServer bằng đoạn này
-
+    /**
+     * ✅ PERFECT UPLOAD LOGIC:
+     *
+     * 1. Tạo loading view với unique ID
+     * 2. Hiển thị loading NGAY LẬP TỨC (chỉ ở người gửi)
+     * 3. Gửi file lên server
+     * 4. Chờ MESSAGE_RECEIVE từ server (tin nhắn thật)
+     * 5. XÓA loading + THÊM tin nhắn thật
+     *
+     * → MESSAGE_RECEIVE sẽ được broadcast cho CẢ 2 BÊN
+     * → Người nhận nhận ngay, người gửi thấy loading → message thật
+     */
     private void uploadFileToServer(File file, FileType type) {
         String conversationId = mainController.getCurrentConversationId();
         if (conversationId == null) {
@@ -98,23 +110,27 @@ public class FileHandler {
         String userId = mainController.getCurrentUser().getUserId();
         String tempId = "loading-" + System.currentTimeMillis();
 
-        System.out.println("\nUPLOAD FILE START ==========");
+        System.out.println("\n========== UPLOAD START ==========");
         System.out.println("File: " + file.getName());
         System.out.println("Size: " + formatSize(file.length()));
         System.out.println("Temp ID: " + tempId);
+        System.out.println("===================================");
 
-        // Tạo và hiển thị loading ngay lập tức (chỉ ở người gửi)
-        VBox loadingView = createSimpleLoadingPreview(file, type);
+        // ✅ STEP 1: Tạo loading view
+        VBox loadingView = createLoadingPreview(file, type);
         loadingView.setId(tempId);
 
+        // ✅ STEP 2: Hiển thị loading NGAY LẬP TỨC (chỉ ở người gửi)
         Platform.runLater(() -> {
             mainController.addLoadingMessageToUI(loadingView);
             mainController.scrollToBottom();
+            System.out.println("✅ Loading view displayed: " + tempId);
         });
 
+        // ✅ STEP 3: Upload trong background thread
         executor.submit(() -> {
             try {
-                // Gửi lệnh upload
+                // Gửi request
                 String request = Protocol.buildRequest(
                         Protocol.FILE_UPLOAD,
                         conversationId,
@@ -126,39 +142,42 @@ public class FileHandler {
 
                 socketClient.sendMessage(request);
                 Thread.sleep(100);
+
+                // Gửi file data
                 sendFileData(file);
+                System.out.println("✅ File data sent");
 
-                System.out.println("File sent, waiting for MESSAGE_RECEIVE...");
-
-                // CHỜ MESSAGE_RECEIVE - đây là tin nhắn thật từ server
-                String messageReceive = null;
-                int attempts = 0;
-                while (attempts < 20 && messageReceive == null) {
-                    String resp = socketClient.receiveMessage();
-                    if (resp != null && resp.startsWith("MESSAGE_RECEIVE")) {
-                        messageReceive = resp;
-                        System.out.println("Received MESSAGE_RECEIVE → done!");
-                    }
-                    attempts++;
-                    Thread.sleep(200);
-                }
+                // ✅ STEP 4: CHỜ MESSAGE_RECEIVE (tin nhắn thật từ server)
+                String messageReceive = waitForMessageReceive(20);
 
                 if (messageReceive == null) {
-                    throw new Exception("Timeout: Không nhận được phản hồi từ server");
+                    throw new Exception("Timeout: Không nhận được MESSAGE_RECEIVE");
                 }
 
-                Message realMessage = parseMessageReceive(messageReceive);
-                if (realMessage == null) throw new Exception("Parse MESSAGE_RECEIVE thất bại");
+                System.out.println("✅ Received MESSAGE_RECEIVE");
 
-                // XÓA LOADING + THÊM TIN NHẮN THẬT (chỉ chạy ở người gửi)
+                // ✅ STEP 5: Parse message
+                Message realMessage = parseMessageReceive(messageReceive);
+                if (realMessage == null) {
+                    throw new Exception("Parse MESSAGE_RECEIVE failed");
+                }
+
+                // ✅ STEP 6: XÓA LOADING + THÊM MESSAGE THẬT
                 Platform.runLater(() -> {
                     mainController.removeLoadingMessageFromUI(loadingView);
+                    System.out.println("✅ Loading removed: " + tempId);
+
                     mainController.addMessageToUI(realMessage);
                     mainController.scrollToBottom();
+                    System.out.println("✅ Real message displayed: " + realMessage.getMessageId());
                 });
 
+                System.out.println("\n========== UPLOAD SUCCESS ==========\n");
+
             } catch (Exception e) {
-                System.err.println("Upload failed: " + e.getMessage());
+                System.err.println("❌ Upload failed: " + e.getMessage());
+                e.printStackTrace();
+
                 Platform.runLater(() -> {
                     mainController.removeLoadingMessageFromUI(loadingView);
                     AlertUtil.showToastError("Gửi thất bại: " + e.getMessage());
@@ -168,7 +187,29 @@ public class FileHandler {
     }
 
     /**
-     * Parse MESSAGE_RECEIVE thành Message object
+     * ✅ Chờ MESSAGE_RECEIVE từ server
+     */
+    private String waitForMessageReceive(int maxAttempts) {
+        try {
+            for (int i = 0; i < maxAttempts; i++) {
+                String resp = socketClient.receiveMessage();
+
+                if (resp != null && resp.startsWith("MESSAGE_RECEIVE")) {
+                    System.out.println("→ Got MESSAGE_RECEIVE (attempt " + (i + 1) + ")");
+                    return resp;
+                }
+
+                Thread.sleep(200);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error waiting for MESSAGE_RECEIVE: " + e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * ✅ Parse MESSAGE_RECEIVE thành Message object
      */
     private Message parseMessageReceive(String messageReceive) {
         try {
@@ -210,11 +251,13 @@ public class FileHandler {
         }
     }
 
-    private VBox createSimpleLoadingPreview(File file, FileType type) {
+    /**
+     * ✅ Tạo loading preview với animation
+     */
+    private VBox createLoadingPreview(File file, FileType type) {
         VBox container = new VBox(8);
         container.setAlignment(Pos.CENTER_RIGHT);
         container.setPadding(new Insets(8, 16, 8, 16));
-        container.setId("loading-" + System.currentTimeMillis());
 
         HBox loadingBox = new HBox(12);
         loadingBox.setAlignment(Pos.CENTER_LEFT);
@@ -222,23 +265,26 @@ public class FileHandler {
                 "-fx-background-color: #E3F2FD; " +
                         "-fx-background-radius: 18; " +
                         "-fx-padding: 12 16 12 16; " +
-                        "-fx-max-width: 400px;"
+                        "-fx-max-width: 400px; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 4, 0, 0, 2);"
         );
 
         VBox content = new VBox(8);
 
+        // Preview image nếu là IMAGE
         if (type == FileType.IMAGE) {
             try {
                 ImageView preview = new ImageView(new Image(file.toURI().toString()));
                 preview.setFitWidth(200);
                 preview.setPreserveRatio(true);
-                preview.setStyle("-fx-opacity: 0.7;");
+                preview.setStyle("-fx-opacity: 0.7; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 4, 0, 0, 1);");
                 content.getChildren().add(preview);
             } catch (Exception e) {
                 System.err.println("⚠️ Cannot load image preview");
             }
         }
 
+        // File info
         HBox fileInfo = new HBox(8);
         fileInfo.setAlignment(Pos.CENTER_LEFT);
 
@@ -256,8 +302,14 @@ public class FileHandler {
         fileDetails.getChildren().addAll(fileNameLabel, sizeLabel);
         fileInfo.getChildren().addAll(fileIcon, fileDetails);
 
-        Label statusLabel = new Label("Đang gửi...");
-        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #1976D2; -fx-font-weight: 500;");
+        // ✅ Status label với animation
+        Label statusLabel = new Label("⏳ Đang gửi...");
+        statusLabel.setStyle(
+                "-fx-font-size: 12px; " +
+                        "-fx-text-fill: #1976D2; " +
+                        "-fx-font-weight: 500; " +
+                        "-fx-padding: 4 0 0 0;"
+        );
 
         content.getChildren().addAll(fileInfo, statusLabel);
         loadingBox.getChildren().add(content);
@@ -266,6 +318,9 @@ public class FileHandler {
         return container;
     }
 
+    /**
+     * File icons
+     */
     private String getFileIcon(FileType type) {
         return switch (type) {
             case IMAGE -> "🖼️";
@@ -277,6 +332,9 @@ public class FileHandler {
         };
     }
 
+    /**
+     * Send file data qua socket
+     */
     private void sendFileData(File file) throws IOException {
         try (InputStream fileIn = new FileInputStream(file)) {
             OutputStream out = socketClient.getRawOutputStream();
@@ -294,6 +352,9 @@ public class FileHandler {
         }
     }
 
+    /**
+     * Detect file type
+     */
     private FileType detectFileType(File file) {
         String name = file.getName().toLowerCase();
         if (name.matches(".*\\.(png|jpg|jpeg|gif|webp|bmp|svg)$")) return FileType.IMAGE;
@@ -304,6 +365,9 @@ public class FileHandler {
         return FileType.OTHER;
     }
 
+    /**
+     * Get max size theo file type
+     */
     private long getMaxSize(FileType type) {
         return switch (type) {
             case IMAGE -> MAX_IMAGE_SIZE;
@@ -315,23 +379,35 @@ public class FileHandler {
         };
     }
 
+    /**
+     * Show file chooser
+     */
     private File showFileChooser(FileChooser chooser) {
         Window window = mainController.getLeftSidebar().getScene().getWindow();
         return chooser.showOpenDialog(window);
     }
 
+    /**
+     * Format file size
+     */
     private String formatSize(long bytes) {
         if (bytes < 1024) return bytes + " B";
         if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
         return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
     }
 
+    /**
+     * Cleanup
+     */
     public void cleanup() {
         if (executor != null && !executor.isShutdown()) {
             executor.shutdown();
         }
     }
 
+    /**
+     * File types
+     */
     private enum FileType {
         IMAGE, VIDEO, AUDIO, DOCUMENT, ARCHIVE, OTHER
     }

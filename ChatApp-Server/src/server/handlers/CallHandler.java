@@ -1,29 +1,32 @@
 package server.handlers;
 
+import config.ServerConfig;
+import database.dao.CallHistoryDAO;
+import database.dao.CallParticipantDAO;
 import database.dao.ConversationDAO;
 import database.dao.UserDAO;
+import models.CallHistory;
+import models.CallParticipant;
 import models.Conversation;
 import models.User;
 import protocol.Protocol;
 import server.ClientHandler;
 import server.media.UdpMediaServer;
 
-import java.util.List;
-import java.util.Map;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Server-side Call Handler với UDP support
+ * Server-side Call Handler - FIXED với Call History tracking
+ * Version: 3.0 - Complete IP Detection + Call History
  */
 public class CallHandler {
 
     private final ClientHandler clientHandler;
     private static final Map<String, CallSession> activeCalls = new ConcurrentHashMap<>();
     private static UdpMediaServer mediaServer;
-
-    // UDP Server configuration
-    private static final String UDP_SERVER_IP = "0.0.0.0";
-    private static final int UDP_BASE_PORT = 50000;
 
     public CallHandler(ClientHandler clientHandler) {
         this.clientHandler = clientHandler;
@@ -33,11 +36,19 @@ public class CallHandler {
     private static synchronized void initializeMediaServer() {
         if (mediaServer == null) {
             try {
-                mediaServer = new UdpMediaServer(UDP_SERVER_IP, UDP_BASE_PORT);
+                String bindAddress = ServerConfig.getUdpServerIP();
+                int basePort = ServerConfig.getUdpBasePort();
+
+                mediaServer = new UdpMediaServer(bindAddress, basePort);
                 mediaServer.start();
-                System.out.println("✅ UDP Media Server started on port " + UDP_BASE_PORT);
+
+                System.out.println("✅ UDP Media Server started");
+                System.out.println("   Bind Address: " + bindAddress);
+                System.out.println("   Base Port: " + basePort);
+
             } catch (Exception e) {
                 System.err.println("❌ Failed to start UDP Media Server: " + e.getMessage());
+                e.printStackTrace();
             }
         }
     }
@@ -73,10 +84,9 @@ public class CallHandler {
 
         String conversationId = parts[1];
         String callerId = parts[2];
-        String callType = parts[3]; // "audio" or "video"
+        String callType = parts[3];
 
         try {
-            // Lấy conversation để tìm members
             Conversation conv = ConversationDAO.getConversationById(conversationId);
             if (conv == null) {
                 clientHandler.sendMessage(Protocol.buildErrorResponse(
@@ -84,33 +94,60 @@ public class CallHandler {
                 return;
             }
 
-            // Tạo call session
             String callId = generateCallId();
             int udpPort = allocateUdpPort(callId);
 
+            // Tạo session cuộc gọi
             CallSession session = new CallSession(
                     callId, conversationId, callerId, callType, udpPort
             );
             activeCalls.put(callId, session);
 
-            // Gửi thông báo cuộc gọi đến các thành viên
+            // ✅ LƯU CALL HISTORY
+            String callerName = getUserName(callerId);
+            CallHistory callHistory = new CallHistory(
+                    callId, conversationId, callType, callerId, callerName
+            );
+            CallHistoryDAO.createCallHistory(callHistory);
+
+            // ✅ LƯU CALLER PARTICIPANT
+            CallParticipant callerParticipant = new CallParticipant(
+                    callId, callerId, "caller", "initiated"
+            );
+            CallParticipantDAO.addParticipant(callerParticipant);
+            CallParticipantDAO.setJoinedTime(callId, callerId);
+
+            // Notify members
             List<String> memberIds = conv.getMemberIds();
             for (String memberId : memberIds) {
                 if (!memberId.equals(callerId)) {
                     notifyIncomingCall(memberId, session);
+
+                    // ✅ LƯU RECEIVER PARTICIPANT (pending state)
+                    CallParticipant receiverParticipant = new CallParticipant(
+                            callId, memberId, "receiver", "pending"
+                    );
+                    CallParticipantDAO.addParticipant(receiverParticipant);
                 }
             }
 
-            // Trả về thông tin cho caller
+            // Get server IP for client
+            String serverIP = getServerIPForClient(clientHandler);
+
             String responseData = String.format("%s%s%s%s%d",
                     callId, Protocol.DELIMITER,
-                    getServerPublicIP(), Protocol.DELIMITER,
+                    serverIP, Protocol.DELIMITER,
                     udpPort);
 
             clientHandler.sendMessage(Protocol.buildSuccessResponse(
                     "Call started", responseData));
 
-            System.out.println("✅ Call started: " + callId + " (Port: " + udpPort + ")");
+            System.out.println("✅ Call started: " + callId);
+            System.out.println("   Caller: " + callerId);
+            System.out.println("   Server IP: " + serverIP);
+            System.out.println("   UDP Port: " + udpPort);
+            System.out.println("   Type: " + callType);
+            System.out.println("   ✓ Saved to call_history");
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -140,7 +177,11 @@ public class CallHandler {
 
         session.addParticipant(userId);
 
-        // Thông báo cho caller
+        // ✅ CẬP NHẬT PARTICIPANT ACTION
+        CallParticipantDAO.updateParticipantAction(callId, userId, "answered");
+        CallParticipantDAO.setJoinedTime(callId, userId);
+
+        // Notify caller
         ClientHandler callerHandler = clientHandler.getServer()
                 .getClientHandler(session.getCallerId());
         if (callerHandler != null) {
@@ -148,16 +189,19 @@ public class CallHandler {
                     Protocol.CALL_ANSWERED, callId, userId));
         }
 
-        // Trả về thông tin UDP cho answerer
+        String serverIP = getServerIPForClient(clientHandler);
+
         String responseData = String.format("%s%s%d%s%s",
-                getServerPublicIP(), Protocol.DELIMITER,
+                serverIP, Protocol.DELIMITER,
                 session.getUdpPort(), Protocol.DELIMITER,
                 session.getCallType());
 
         clientHandler.sendMessage(Protocol.buildSuccessResponse(
                 "Call answered", responseData));
 
-        System.out.println("✅ Call answered: " + callId + " by " + userId);
+        System.out.println("✅ Call answered: " + callId);
+        System.out.println("   Answerer: " + userId);
+        System.out.println("   ✓ Updated call_participants");
     }
 
     // ==================== REJECT CALL ====================
@@ -171,7 +215,13 @@ public class CallHandler {
         CallSession session = activeCalls.get(callId);
         if (session == null) return;
 
-        // Thông báo cho caller
+        // ✅ CẬP NHẬT PARTICIPANT ACTION
+        CallParticipantDAO.updateParticipantAction(callId, userId, "rejected");
+
+        // ✅ CẬP NHẬT CALL HISTORY STATUS
+        CallHistoryDAO.endCall(callId, "rejected");
+
+        // Notify caller
         ClientHandler callerHandler = clientHandler.getServer()
                 .getClientHandler(session.getCallerId());
         if (callerHandler != null) {
@@ -179,7 +229,11 @@ public class CallHandler {
                     Protocol.CALL_REJECTED, callId, userId));
         }
 
+        releaseUdpPort(callId);
+        activeCalls.remove(callId);
+
         System.out.println("❌ Call rejected: " + callId + " by " + userId);
+        System.out.println("   ✓ Updated call_history (status=rejected)");
     }
 
     // ==================== END CALL ====================
@@ -193,7 +247,11 @@ public class CallHandler {
         CallSession session = activeCalls.get(callId);
         if (session == null) return;
 
-        // Thông báo cho tất cả participants
+        // ✅ SET LEFT TIME cho user kết thúc
+        CallParticipantDAO.setLeftTime(callId, userId);
+        CallParticipantDAO.updateParticipantAction(callId, userId, "left");
+
+        // Notify all participants
         for (String participantId : session.getParticipants().keySet()) {
             if (!participantId.equals(userId)) {
                 ClientHandler handler = clientHandler.getServer()
@@ -202,16 +260,22 @@ public class CallHandler {
                     handler.sendMessage(Protocol.buildRequest(
                             Protocol.CALL_ENDED, callId));
                 }
+
+                // ✅ UPDATE LEFT TIME cho các participants khác
+                CallParticipantDAO.setLeftTime(callId, participantId);
             }
         }
 
-        // Giải phóng UDP port
-        releaseUdpPort(callId);
+        // ✅ CẬP NHẬT CALL HISTORY - KẾT THÚC CUỘC GỌI
+        CallHistoryDAO.endCall(callId, "completed");
 
-        // Xóa session
+        releaseUdpPort(callId);
         activeCalls.remove(callId);
 
         System.out.println("✅ Call ended: " + callId);
+        System.out.println("   ✓ Updated call_history (status=completed)");
+        System.out.println("   ✓ Updated call_participants (left_at)");
+        System.out.println("   Remaining active calls: " + activeCalls.size());
     }
 
     // ==================== HELPERS ====================
@@ -236,8 +300,7 @@ public class CallHandler {
     }
 
     private int allocateUdpPort(String callId) {
-        // Simple port allocation - tăng dần từ base port
-        int port = UDP_BASE_PORT + activeCalls.size();
+        int port = ServerConfig.getUdpBasePort() + activeCalls.size();
         if (mediaServer != null) {
             mediaServer.registerCall(callId, port);
         }
@@ -250,13 +313,185 @@ public class CallHandler {
         }
     }
 
-    private String getServerPublicIP() {
+    // ==================== IP DETECTION ====================
+
+    private String getServerIPForClient(ClientHandler handler) {
         try {
-            // Try to get ZeroTier IP first
-            return java.net.InetAddress.getLocalHost().getHostAddress();
+            InetAddress clientAddr = handler.getClientAddress();
+            InetAddress serverLocalAddr = handler.getServerLocalAddress();
+
+            if (serverLocalAddr != null &&
+                    !serverLocalAddr.isLoopbackAddress() &&
+                    !serverLocalAddr.isAnyLocalAddress()) {
+                return serverLocalAddr.getHostAddress();
+            }
+
+            if (clientAddr != null) {
+                String bestIP = detectBestNetworkForClient(clientAddr);
+                if (bestIP != null) {
+                    return bestIP;
+                }
+            }
+
         } catch (Exception e) {
-            return "127.0.0.1";
+            System.err.println("⚠️ Failed to detect server IP: " + e.getMessage());
         }
+
+        return "127.0.0.1";
+    }
+
+    private String detectBestNetworkForClient(InetAddress clientAddr) {
+        try {
+            String clientIP = clientAddr.getHostAddress();
+
+            if (ServerConfig.isZeroTierEnabled() && isZeroTierIP(clientIP)) {
+                String ztIP = getZeroTierIP();
+                if (ztIP != null) return ztIP;
+            }
+
+            if (isPrivateIP(clientIP)) {
+                String matchingIP = getMatchingPrivateIP(clientIP);
+                if (matchingIP != null) return matchingIP;
+
+                String anyPrivateIP = getAnyPrivateIP();
+                if (anyPrivateIP != null) return anyPrivateIP;
+            }
+
+            String publicIP = getPublicIP();
+            if (publicIP != null) return publicIP;
+
+        } catch (Exception e) {
+            System.err.println("⚠️ Error detecting best network: " + e.getMessage());
+        }
+
+        return null;
+    }
+
+    private boolean isZeroTierIP(String ip) {
+        return ip.matches("172\\.(2[2-9]|3[0-1])\\..*");
+    }
+
+    private boolean isPrivateIP(String ip) {
+        return ip.startsWith("192.168.") ||
+                ip.startsWith("10.") ||
+                ip.matches("172\\.(1[6-9]|2[0-9]|3[0-1])\\..*");
+    }
+
+    private String getZeroTierIP() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (!iface.isUp() || iface.isLoopback()) continue;
+
+                String name = iface.getName().toLowerCase();
+                String displayName = iface.getDisplayName().toLowerCase();
+
+                if (name.contains("zt") || name.contains("zerotier") ||
+                        name.startsWith("feth") || displayName.contains("zerotier")) {
+                    Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                    while (addresses.hasMoreElements()) {
+                        InetAddress addr = addresses.nextElement();
+                        if (addr.getAddress().length == 4) {
+                            String ip = addr.getHostAddress();
+                            if (isZeroTierIP(ip)) return ip;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Error getting ZeroTier IP: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String getMatchingPrivateIP(String clientIP) {
+        try {
+            String clientSubnet = clientIP.substring(0, clientIP.lastIndexOf('.'));
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (!iface.isUp() || iface.isLoopback()) continue;
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    if (addr.getAddress().length != 4) continue;
+
+                    String ip = addr.getHostAddress();
+                    String subnet = ip.substring(0, ip.lastIndexOf('.'));
+
+                    if (subnet.equals(clientSubnet)) {
+                        return ip;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Error finding matching private IP: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String getPublicIP() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (!iface.isUp() || iface.isLoopback()) continue;
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    if (addr.getAddress().length != 4) continue;
+
+                    String ip = addr.getHostAddress();
+                    if (!isPrivateIP(ip) && !ip.startsWith("127.")) {
+                        return ip;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Error getting public IP: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private String getAnyPrivateIP() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            List<String> ips192 = new ArrayList<>();
+            List<String> ips10 = new ArrayList<>();
+            List<String> ips172 = new ArrayList<>();
+
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (!iface.isUp() || iface.isLoopback()) continue;
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    if (addr.getAddress().length != 4) continue;
+
+                    String ip = addr.getHostAddress();
+                    if (ip.startsWith("192.168.")) {
+                        ips192.add(ip);
+                    } else if (ip.startsWith("10.")) {
+                        ips10.add(ip);
+                    } else if (ip.matches("172\\.(1[6-9]|2[0-9]|3[0-1])\\..*")) {
+                        ips172.add(ip);
+                    }
+                }
+            }
+
+            if (!ips192.isEmpty()) return ips192.get(0);
+            if (!ips10.isEmpty()) return ips10.get(0);
+            if (!ips172.isEmpty()) return ips172.get(0);
+
+        } catch (Exception e) {
+            System.err.println("⚠️ Error getting any private IP: " + e.getMessage());
+        }
+        return null;
     }
 
     private String getUserName(String userId) {
